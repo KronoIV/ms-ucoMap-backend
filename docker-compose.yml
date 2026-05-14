@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  # ── Aplicacion Spring Boot ─────────────────
+  app:
+    build: .
+    container_name: ucomap-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MONGODB_URI=mongodb+srv://admin:eWxxjXuVWRRNRCqS@ucomap.02mi34n.mongodb.net/ucoCampusMap?appName=UcoMap
+      - INIT_DATA=true
+      - CORS_ORIGINS=*
+    restart: unless-stopped
+
+  # ── MongoDB local (opcional, para desarrollo sin Atlas) ──
+  # Descomenta este bloque y cambia MONGODB_URI a mongodb://mongo:27017/ucoCampusMap
+  # mongo:
+  #   image: mongo:7
+  #   container_name: ucomap-mongo
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongo_data:/data/db
+
+# volumes:
+#   mongo_data:
+
