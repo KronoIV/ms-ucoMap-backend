@@ -3,12 +3,15 @@ package com.ucomap.backend.controller;
 import com.ucomap.backend.dto.StatsDTO;
 import com.ucomap.backend.model.DeviceSession;
 import com.ucomap.backend.service.DeviceSessionService;
+import com.ucomap.backend.service.SessionEventPublisher;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Arrays;
 import java.util.List;
@@ -33,7 +36,8 @@ public class DeviceSessionController {
     private static final String COOKIE_NAME = "UCOMAP_DEVICE_ID";
     private static final int    COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 10; // 10 años
 
-    private final DeviceSessionService sessionService;
+    private final DeviceSessionService  sessionService;
+    private final SessionEventPublisher eventPublisher;
 
     /**
      * El cliente solo necesita llamar este endpoint — sin body, sin configuracion.
@@ -79,6 +83,22 @@ public class DeviceSessionController {
     @GetMapping
     public ResponseEntity<List<DeviceSession>> getAllSessions() {
         return ResponseEntity.ok(sessionService.getAllSessions());
+    }
+
+    /**
+     * SSE — el frontend se suscribe aqui y recibe actualizaciones en tiempo real.
+     * Emite dos tipos de eventos:
+     *   "session" → DeviceSession (el dispositivo que acaba de hacer ping)
+     *   "stats"   → StatsDTO (estadisticas globales actualizadas)
+     *
+     * Uso en frontend:
+     *   const es = new EventSource('http://localhost:8080/api/sessions/stream');
+     *   es.addEventListener('session', e => console.log(JSON.parse(e.data)));
+     *   es.addEventListener('stats',   e => console.log(JSON.parse(e.data)));
+     */
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream() {
+        return eventPublisher.subscribe();
     }
 
     // ── Helpers ───────────────────────────────────────────────

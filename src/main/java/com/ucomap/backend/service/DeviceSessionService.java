@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class DeviceSessionService {
 
     private final DeviceSessionRepository repository;
+    private final SessionEventPublisher    eventPublisher;
 
     /**
      * Registra o actualiza la sesion de un dispositivo.
@@ -36,7 +37,9 @@ public class DeviceSessionService {
             if (language != null) session.setLanguage(language);
             log.info("Ping actualizado — deviceId={} platform={} sesiones={}",
                     deviceId, session.getPlatform(), session.getSessionCount());
-            return repository.save(session);
+            DeviceSession saved = repository.save(session);
+            eventPublisher.publishPing(saved, getStats());
+            return saved;
         }
 
         String platform = detectPlatform(userAgent);
@@ -52,7 +55,9 @@ public class DeviceSessionService {
                 .build();
 
         log.info("Nuevo dispositivo — deviceId={} platform={} ip={}", deviceId, platform, ip);
-        return repository.save(newSession);
+        DeviceSession saved = repository.save(newSession);
+        eventPublisher.publishPing(saved, getStats());
+        return saved;
     }
 
 
