@@ -25,6 +25,7 @@ public class CorsConfig {
                         .allowedOriginPatterns(origins)
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
+                        .allowCredentials(true)   // necesario para que las cookies funcionen cross-origin
                         .maxAge(3600);
             }
         };
