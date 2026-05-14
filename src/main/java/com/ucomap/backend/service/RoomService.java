@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -49,9 +50,25 @@ public class RoomService {
 
     public void delete(String roomId) {
         Room room = findByRoomId(roomId);
-        // Soft delete — no borrar físicamente
         room.setActive(false);
         roomRepository.save(room);
+    }
+
+    /**
+     * Actualiza solo los campos presentes en el mapa (PATCH semantics).
+     * Campos soportados: name, category, stateId, modelUrl, active.
+     * Los campos ausentes en el mapa NO se modifican.
+     */
+    public Room patch(String roomId, Map<String, Object> fields) {
+        Room room = findByRoomId(roomId);
+
+        if (fields.containsKey("name"))     room.setName((String) fields.get("name"));
+        if (fields.containsKey("category")) room.setCategory((String) fields.get("category"));
+        if (fields.containsKey("stateId"))  room.setStateId((String) fields.get("stateId"));
+        if (fields.containsKey("modelUrl")) room.setModelUrl((String) fields.get("modelUrl"));
+        if (fields.containsKey("active"))   room.setActive((Boolean) fields.get("active"));
+
+        return roomRepository.save(room);
     }
 }
 

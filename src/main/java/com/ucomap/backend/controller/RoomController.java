@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * CRUD de salones.
@@ -16,8 +17,9 @@ import java.util.List;
  * GET    /api/rooms              — todos los activos
  * GET    /api/rooms?category=CO  — filtrar por categoría
  * GET    /api/rooms/{roomId}     — salón específico
- * POST   /api/rooms              — crear
- * PUT    /api/rooms/{roomId}     — actualizar
+ * POST   /api/rooms              — crear (requiere objeto completo)
+ * PUT    /api/rooms/{roomId}     — reemplazar completo
+ * PATCH  /api/rooms/{roomId}     — actualizar campos parciales: { "active": false }
  * DELETE /api/rooms/{roomId}     — soft delete
  */
 @RestController
@@ -52,6 +54,20 @@ public class RoomController {
             @PathVariable String roomId,
             @Valid @RequestBody Room room) {
         return ResponseEntity.ok(roomService.update(roomId, room));
+    }
+
+    /**
+     * Actualiza solo los campos enviados en el body.
+     * Ejemplos de uso:
+     *   { "active": false }
+     *   { "name": "Nuevo nombre", "category": "EDC" }
+     *   { "stateId": "co205", "active": true }
+     */
+    @PatchMapping("/{roomId}")
+    public ResponseEntity<Room> patch(
+            @PathVariable String roomId,
+            @RequestBody Map<String, Object> fields) {
+        return ResponseEntity.ok(roomService.patch(roomId, fields));
     }
 
     @DeleteMapping("/{roomId}")
