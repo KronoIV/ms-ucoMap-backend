@@ -40,7 +40,7 @@ public class CampusService {
                 ));
 
         return CampusDataDTO.builder()
-                .rooms(roomService.findAll())
+                .rooms(roomService.findAllActive())
                 .poiClipNames(buildingService.findClipsAsMap())
                 .graphNodes(graphNodeDTOs)
                 .graphEdges(graphService.findAllEdgesAsPairs())

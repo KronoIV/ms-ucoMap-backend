@@ -16,12 +16,19 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
 
+    /** Admin: devuelve TODOS los salones (activos e inactivos). */
     public List<Room> findAll() {
-        return roomRepository.findByActiveTrue();
+        return roomRepository.findAll();
     }
 
+    /** Admin: filtra por categoria sin importar estado active. */
     public List<Room> findByCategory(String category) {
-        return roomRepository.findByCategoryAndActiveTrue(category);
+        return roomRepository.findByCategory(category);
+    }
+
+    /** Campus: solo los salones activos (usado internamente por CampusService). */
+    public List<Room> findAllActive() {
+        return roomRepository.findByActiveTrue();
     }
 
     public Room findByRoomId(String roomId) {
