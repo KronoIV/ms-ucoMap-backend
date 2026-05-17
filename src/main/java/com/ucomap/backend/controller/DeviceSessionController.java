@@ -1,19 +1,17 @@
 package com.ucomap.backend.controller;
 
+import com.ucomap.backend.dto.PingRequestDTO;
 import com.ucomap.backend.dto.StatsDTO;
 import com.ucomap.backend.model.DeviceSession;
 import com.ucomap.backend.service.DeviceSessionService;
 import com.ucomap.backend.service.SessionEventPublisher;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,44 +31,30 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DeviceSessionController {
 
-    private static final String COOKIE_NAME = "UCOMAP_DEVICE_ID";
-    private static final int    COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 10; // 10 años
-
     private final DeviceSessionService  sessionService;
     private final SessionEventPublisher eventPublisher;
 
     /**
-     * El cliente solo necesita llamar este endpoint — sin body, sin configuracion.
-     * El servidor:
-     *  1. Lee la cookie UCOMAP_DEVICE_ID; si no existe, genera un UUID nuevo y la setea.
-     *  2. Extrae User-Agent, IP y Accept-Language de los headers automaticamente.
-     *  3. Crea o actualiza el registro en MongoDB.
+     * El cliente envia su deviceId (UUID persistido en localStorage).
+     * Si no lo envía (fallback), el servidor genera uno.
+     * User-Agent, IP y Accept-Language se extraen de los headers HTTP.
      */
     @PostMapping("/ping")
     public ResponseEntity<DeviceSession> ping(
-            HttpServletRequest request,
-            HttpServletResponse response) {
+            @RequestBody(required = false) PingRequestDTO body,
+            HttpServletRequest request) {
 
-        // ── 1. Resolver deviceId desde cookie ─────────────────
-        String deviceId = readCookie(request);
-        boolean isNew   = (deviceId == null);
-        if (isNew) {
-            deviceId = UUID.randomUUID().toString();
-        }
+        // Leer deviceId del body; si no viene, generar uno (fallback)
+        String deviceId = (body != null
+                && body.deviceId() != null
+                && !body.deviceId().isBlank())
+                ? body.deviceId()
+                : UUID.randomUUID().toString();
 
-        // ── 2. Refrescar/crear la cookie (siempre renovar TTL) ─
-        Cookie cookie = new Cookie(COOKIE_NAME, deviceId);
-        cookie.setMaxAge(COOKIE_MAX_AGE);
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);   // no accesible desde JS del cliente
-        response.addCookie(cookie);
-
-        // ── 3. Extraer metadata de los headers HTTP ───────────
         String userAgent = header(request, "User-Agent");
         String ip        = extractIp(request);
         String language  = extractLanguage(request);
 
-        // ── 4. Registrar en MongoDB ───────────────────────────
         DeviceSession session = sessionService.registerPing(deviceId, userAgent, ip, language);
         return ResponseEntity.ok(session);
     }
@@ -102,15 +86,6 @@ public class DeviceSessionController {
     }
 
     // ── Helpers ───────────────────────────────────────────────
-
-    private String readCookie(HttpServletRequest request) {
-        if (request.getCookies() == null) return null;
-        return Arrays.stream(request.getCookies())
-                .filter(c -> COOKIE_NAME.equals(c.getName()))
-                .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
-    }
 
     private String extractIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
