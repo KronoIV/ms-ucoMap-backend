@@ -25,6 +25,7 @@ public class Building {
      * Coincide con el nodeId del GraphNode tipo BUILDING.
      */
     @Id
+    @NotBlank
     private String buildingId;
 
     /** Nombre visible en la UI. */
@@ -39,6 +40,7 @@ public class Building {
      * Debe coincidir con Room.category ("CO", "EDC", "Otros").
      */
     @Indexed
+    @NotBlank
     private String category;
 
     /** Coordenadas GPS del edificio (centro aproximado). */

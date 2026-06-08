@@ -185,6 +185,13 @@ public class DataInitializerService {
                 .category("CO")
                 .gps(new GpsPoint(6.149879545997976, -75.3660539173641))
                 .build(),
+                    Building.builder()
+                        .buildingId("M")
+                        .label("MADRE DE LA SABIDURIA")
+                        .color("#D84315")
+                        .category("M")
+                        .gps(new GpsPoint(6.1497146345952505, -75.36588140237029))
+                        .build(),
             Building.builder()
                 .buildingId("OTROS")
                 .label("Otros")

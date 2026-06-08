@@ -57,8 +57,7 @@ public class RoomService {
 
     public void delete(String roomId) {
         Room room = findByRoomId(roomId);
-        room.setActive(false);
-        roomRepository.save(room);
+        roomRepository.delete(room);
     }
 
     /**

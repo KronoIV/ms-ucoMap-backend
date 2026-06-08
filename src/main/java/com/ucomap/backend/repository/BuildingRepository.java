@@ -12,6 +12,8 @@ public interface BuildingRepository extends MongoRepository<Building, String> {
 
     Optional<Building> findByCategory(String category);
 
+    boolean existsByCategoryIgnoreCase(String category);
+
     List<Building> findByActiveTrue();
 }
 

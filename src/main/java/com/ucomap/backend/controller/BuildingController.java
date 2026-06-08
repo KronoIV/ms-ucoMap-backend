@@ -18,7 +18,9 @@ import java.util.Map;
  *
  * GET    /api/buildings              — todos los edificios activos
  * GET    /api/buildings/{id}         — edificio específico
+ * POST   /api/buildings              — crear edificio
  * PUT    /api/buildings/{id}         — actualizar edificio
+ * DELETE /api/buildings/{id}         — eliminar edificio (físico)
  *
  * GET    /api/map/config             — configuración del mapa (bounds, umbrales)
  * PUT    /api/map/config             — actualizar configuración
@@ -26,7 +28,7 @@ import java.util.Map;
  * GET    /api/poi-clips              — todos los clips activos
  * GET    /api/poi-clips/map          — mapa clipId → displayName
  * POST   /api/poi-clips              — crear clip
- * DELETE /api/poi-clips/{clipId}     — desactivar clip
+ * DELETE /api/poi-clips/{clipId}     — eliminar clip (físico)
  */
 @RestController
 @RequiredArgsConstructor
@@ -46,12 +48,23 @@ public class BuildingController {
         return ResponseEntity.ok(buildingService.findById(buildingId));
     }
 
+    @PostMapping("/api/buildings")
+    public ResponseEntity<Building> createBuilding(@Valid @RequestBody Building building) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(buildingService.create(building));
+    }
+
     @PutMapping("/api/buildings/{buildingId}")
     public ResponseEntity<Building> updateBuilding(
             @PathVariable String buildingId,
             @Valid @RequestBody Building building) {
-        building.setBuildingId(buildingId);
-        return ResponseEntity.ok(buildingService.save(building));
+        return ResponseEntity.ok(buildingService.update(buildingId, building));
+    }
+
+    @DeleteMapping("/api/buildings/{buildingId}")
+    public ResponseEntity<Void> deleteBuilding(@PathVariable String buildingId) {
+        buildingService.delete(buildingId);
+        return ResponseEntity.noContent().build();
     }
 
     // ── Map Config ─────────────────────────────────────────────

@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,8 +53,54 @@ public class BuildingService {
                         HttpStatus.NOT_FOUND, "Edificio no encontrado: " + buildingId));
     }
 
-    public Building save(Building building) {
+    public Building create(Building building) {
+        String buildingId = requireText(building.getBuildingId(), "buildingId");
+        String category = requireText(building.getCategory(), "category");
+
+        if (buildingRepository.existsById(buildingId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ya existe un edificio con buildingId: " + buildingId);
+        }
+        if (buildingRepository.existsByCategoryIgnoreCase(category)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ya existe un edificio con category: " + category);
+        }
+
+        building.setBuildingId(buildingId);
+        building.setCategory(category);
+        building.setActive(true);
         return buildingRepository.save(building);
+    }
+
+    public Building update(String buildingId, Building updated) {
+        Building existing = findById(buildingId);
+
+        String nextCategory = requireText(updated.getCategory(), "category");
+        if (!Objects.equals(existing.getCategory(), nextCategory)
+                && buildingRepository.existsByCategoryIgnoreCase(nextCategory)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ya existe un edificio con category: " + nextCategory);
+        }
+
+        existing.setLabel(updated.getLabel());
+        existing.setColor(updated.getColor());
+        existing.setCategory(nextCategory);
+        existing.setGps(updated.getGps());
+        existing.setActive(updated.isActive());
+        return buildingRepository.save(existing);
+    }
+
+    public void delete(String buildingId) {
+        Building building = findById(buildingId);
+        buildingRepository.delete(building);
+    }
+
+    private String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El campo " + fieldName + " es obligatorio");
+        }
+        return value.trim();
     }
 
     // ── Map Config ─────────────────────────────────────────────
@@ -89,8 +136,7 @@ public class BuildingService {
         PoiClip clip = poiClipRepository.findById(clipId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "PoiClip no encontrado: " + clipId));
-        clip.setActive(false);
-        poiClipRepository.save(clip);
+        poiClipRepository.delete(clip);
     }
 }
 
