@@ -8,11 +8,26 @@ services:
     container_name: ucomap-backend
     ports:
       - "8080:8080"
+    # Values are injected by the parent shell via: infisical run -- docker-compose up
     environment:
-      - PORT=8080
-      - MONGODB_URI=mongodb+srv://admin:eWxxjXuVWRRNRCqS@ucomap.02mi34n.mongodb.net/ucoCampusMap?appName=UcoMap
-      - INIT_DATA=true
-      - CORS_ORIGINS=*
+      - PORT
+      - MONGODB_URI
+      - JWT_SECRET
+      - JWT_EXPIRATION_MS
+      - INIT_DATA
+      - CORS_ORIGINS
+      - RATE_LIMIT_MAX
+      - RATE_LIMIT_WINDOW
+      - RATE_LIMIT_TRUSTED_PROXIES
+      - MAIL_HOST
+      - MAIL_PORT
+      - MAIL_USERNAME
+      - MAIL_PASSWORD
+      - FRONTEND_URL
+      - PASSWORD_RESET_PATH
+      - PASSWORD_RESET_EXPIRY_MINUTES
+      - PASSWORD_RESET_COOLDOWN_MINUTES
+      - PASSWORD_RESET_EMAIL_SUBJECT
     restart: unless-stopped
 
   # ── MongoDB local (opcional, para desarrollo sin Atlas) ──
