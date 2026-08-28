@@ -77,8 +77,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST,  "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST,  "/api/auth/forgot-password").permitAll()
                 .requestMatchers(HttpMethod.POST,  "/api/auth/reset-password").permitAll()
-                .requestMatchers(HttpMethod.POST,  "/api/devices/ping").permitAll()
-                .requestMatchers(HttpMethod.GET,   "/api/devices/**").permitAll()
+                .requestMatchers(HttpMethod.POST,  "/api/sessions/ping").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/campus/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/campus").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/buildings/**").permitAll()
@@ -88,6 +87,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
 
                 // ── Protected: ADMIN only ──────────────────────────────────
+                .requestMatchers("/api/sessions/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("ADMIN")

@@ -1,5 +1,6 @@
 package co.edu.uco.ucomap.service;
 
+import co.edu.uco.ucomap.dto.PingRequestDTO;
 import co.edu.uco.ucomap.dto.StatsDTO;
 import co.edu.uco.ucomap.model.DeviceSession;
 import co.edu.uco.ucomap.repository.DeviceSessionRepository;
@@ -23,9 +24,16 @@ public class DeviceSessionService {
 
     /**
      * Registra o actualiza la sesion de un dispositivo.
-     * Toda la informacion viene de los headers HTTP — el cliente no envia nada.
+     * Los campos del dispositivo vienen del body; IP y User-Agent de los headers HTTP.
+     * Language: se prefiere el valor del body; si no viene, se usa el header Accept-Language.
      */
-    public DeviceSession registerPing(String deviceId, String userAgent, String ip, String language) {
+    public DeviceSession registerPing(String deviceId, PingRequestDTO body,
+                                      String userAgent, String ip, String headerLang) {
+
+        String lang     = (body != null && body.language() != null && !body.language().isBlank())
+                          ? body.language() : headerLang;
+        String platform = detectPlatform(userAgent);
+
         Optional<DeviceSession> existing = repository.findByDeviceId(deviceId);
 
         if (existing.isPresent()) {
@@ -34,21 +42,35 @@ public class DeviceSessionService {
             session.setSessionCount(session.getSessionCount() + 1);
             session.setUserAgent(userAgent);
             session.setIpAddress(ip);
-            if (language != null) session.setLanguage(language);
+            session.setPlatform(platform);
+            if (lang != null) session.setLanguage(lang);
+            if (body != null) {
+                if (body.deviceModel()      != null) session.setDeviceModel(body.deviceModel());
+                if (body.osVersion()        != null) session.setOsVersion(body.osVersion());
+                if (body.appVersion()       != null) session.setAppVersion(body.appVersion());
+                if (body.timezone()         != null) session.setTimezone(body.timezone());
+                if (body.screenResolution() != null) session.setScreenResolution(body.screenResolution());
+                if (body.networkType()      != null) session.setNetworkType(body.networkType());
+            }
             log.info("Ping actualizado — deviceId={} platform={} sesiones={}",
-                    deviceId, session.getPlatform(), session.getSessionCount());
+                    deviceId, platform, session.getSessionCount());
             DeviceSession saved = repository.save(session);
             eventPublisher.publishPing(saved, getStats());
             return saved;
         }
 
-        String platform = detectPlatform(userAgent);
         DeviceSession newSession = DeviceSession.builder()
                 .deviceId(deviceId)
                 .platform(platform)
                 .userAgent(userAgent)
                 .ipAddress(ip)
-                .language(language)
+                .language(lang)
+                .deviceModel(     body != null ? body.deviceModel()      : null)
+                .osVersion(       body != null ? body.osVersion()        : null)
+                .appVersion(      body != null ? body.appVersion()       : null)
+                .timezone(        body != null ? body.timezone()         : null)
+                .screenResolution(body != null ? body.screenResolution() : null)
+                .networkType(     body != null ? body.networkType()      : null)
                 .firstSeen(Instant.now())
                 .lastSeen(Instant.now())
                 .sessionCount(1)

@@ -3,36 +3,31 @@ package co.edu.uco.ucomap.service;
 import co.edu.uco.ucomap.dto.StatsDTO;
 import co.edu.uco.ucomap.model.DeviceSession;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Gestiona las conexiones SSE activas y emite eventos en tiempo real
- * cada vez que se registra o actualiza una sesion de dispositivo.
- */
 @Slf4j
 @Service
 public class SessionEventPublisher {
 
-    /** Lista thread-safe de clientes SSE conectados */
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
     /**
-     * Registra un nuevo cliente SSE.
-     * Se llama cuando el frontend hace GET /api/sessions/stream.
+     * Registra un nuevo cliente SSE y le envia el estado actual inmediatamente
+     * para que el dashboard no quede en blanco hasta el proximo ping.
      */
-    public SseEmitter subscribe() {
-        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE); // sin timeout
+    public SseEmitter subscribe(StatsDTO initialStats) {
+        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
         emitters.add(emitter);
         log.info("Cliente SSE conectado — total activos: {}", emitters.size());
 
-        // Limpiar el emitter de la lista cuando se cierre/falle
         emitter.onCompletion(() -> {
             emitters.remove(emitter);
             log.info("Cliente SSE desconectado — total activos: {}", emitters.size());
@@ -40,14 +35,21 @@ public class SessionEventPublisher {
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError(e -> emitters.remove(emitter));
 
+        // Estado inicial para que el cliente no espere el primer ping
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("stats")
+                    .data(initialStats, MediaType.APPLICATION_JSON));
+        } catch (IOException e) {
+            emitters.remove(emitter);
+        }
+
         return emitter;
     }
 
     /**
-     * Emite un evento a todos los clientes conectados cuando hay un ping nuevo.
-     * Envia dos eventos:
-     *  - "session"  : el DeviceSession actualizado/creado
-     *  - "stats"    : las estadisticas globales actualizadas
+     * Emite session + stats a todos los clientes tras cada ping.
+     * Usa APPLICATION_JSON explícito para evitar ambigüedad en la negociación de conversor.
      */
     public void publishPing(DeviceSession session, StatsDTO stats) {
         List<SseEmitter> dead = new CopyOnWriteArrayList<>();
@@ -56,11 +58,11 @@ public class SessionEventPublisher {
             try {
                 emitter.send(SseEmitter.event()
                         .name("session")
-                        .data(session));
+                        .data(session, MediaType.APPLICATION_JSON));
 
                 emitter.send(SseEmitter.event()
                         .name("stats")
-                        .data(stats));
+                        .data(stats, MediaType.APPLICATION_JSON));
 
             } catch (IOException e) {
                 dead.add(emitter);
@@ -70,7 +72,24 @@ public class SessionEventPublisher {
         emitters.removeAll(dead);
     }
 
-    /** Numero de clientes SSE conectados en este momento. */
+    /**
+     * Heartbeat cada 25 s para evitar que proxies (nginx, ELB) cierren la conexion
+     * por inactividad (timeout tipico: 60 s).
+     */
+    @Scheduled(fixedDelay = 25_000)
+    public void heartbeat() {
+        if (emitters.isEmpty()) return;
+        List<SseEmitter> dead = new CopyOnWriteArrayList<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().comment("heartbeat"));
+            } catch (IOException e) {
+                dead.add(emitter);
+            }
+        }
+        emitters.removeAll(dead);
+    }
+
     public int connectedClients() {
         return emitters.size();
     }

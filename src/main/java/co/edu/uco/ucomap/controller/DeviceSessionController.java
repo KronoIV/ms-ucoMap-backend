@@ -51,11 +51,11 @@ public class DeviceSessionController {
                 ? body.deviceId()
                 : UUID.randomUUID().toString();
 
-        String userAgent = header(request, "User-Agent");
+        String userAgent  = header(request, "User-Agent");
         String ip        = extractIp(request);
-        String language  = extractLanguage(request);
+        String headerLang = extractLanguage(request);
 
-        DeviceSession session = sessionService.registerPing(deviceId, userAgent, ip, language);
+        DeviceSession session = sessionService.registerPing(deviceId, body, userAgent, ip, headerLang);
         return ResponseEntity.ok(ApiSuccess.of(session));
     }
 
@@ -82,7 +82,7 @@ public class DeviceSessionController {
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
-        return eventPublisher.subscribe();
+        return eventPublisher.subscribe(sessionService.getStats());
     }
 
     // ── Helpers ───────────────────────────────────────────────
