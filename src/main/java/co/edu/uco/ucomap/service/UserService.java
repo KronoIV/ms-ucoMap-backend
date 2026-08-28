@@ -46,6 +46,7 @@ public class UserService {
                 .role(Role.ADMIN)
                 .createdAt(now)
                 .updatedAt(now)
+                .passwordChangedAt(now)
                 .build();
 
         return toResponseDTO(userRepository.save(user));
@@ -69,6 +70,7 @@ public class UserService {
 
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            user.setPasswordChangedAt(Instant.now());
         }
 
         if (request.getActive() != null) {
@@ -98,6 +100,7 @@ public class UserService {
                 .active(user.isActive())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .passwordChangedAt(user.getPasswordChangedAt())
                 .build();
     }
 }

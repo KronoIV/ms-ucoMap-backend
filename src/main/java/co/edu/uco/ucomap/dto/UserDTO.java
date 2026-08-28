@@ -45,5 +45,6 @@ public class UserDTO {
         private boolean active;
         private Instant createdAt;
         private Instant updatedAt;
+        private Instant passwordChangedAt;
     }
 }
