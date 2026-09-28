@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -66,17 +67,26 @@ public class GraphService {
         GraphNode node = findNodeById(nodeId);
         node.setActive(false);
         nodeRepository.save(node);
+        List<GraphEdge> edges = edgeRepository.findByNodeAOrNodeB(nodeId, nodeId);
+        edges.forEach(e -> e.setActive(false));
+        edgeRepository.saveAll(edges);
     }
 
     // ── Edges ─────────────────────────────────────────────────
 
+    /** Solo aristas cuyos dos extremos siguen activos (evita aristas huérfanas de nodos borrados). */
     public List<GraphEdge> findAllEdges() {
-        return edgeRepository.findByActiveTrue();
+        Set<String> activeIds = nodeRepository.findByActiveTrue().stream()
+                .map(GraphNode::getNodeId)
+                .collect(Collectors.toSet());
+        return edgeRepository.findByActiveTrue().stream()
+                .filter(e -> activeIds.contains(e.getNodeA()) && activeIds.contains(e.getNodeB()))
+                .toList();
     }
 
     /** Devuelve aristas como lista de pares [nodeA, nodeB] (formato frontend). */
     public List<List<String>> findAllEdgesAsPairs() {
-        return edgeRepository.findByActiveTrue().stream()
+        return findAllEdges().stream()
                 .map(e -> List.of(e.getNodeA(), e.getNodeB()))
                 .toList();
     }
