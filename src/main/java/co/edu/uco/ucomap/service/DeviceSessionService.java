@@ -100,7 +100,7 @@ public class DeviceSessionService {
 
     // ── Deteccion de plataforma ────────────────────────────────
 
-    private String detectPlatform(String userAgent) {
+    static String detectPlatform(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) return "Unknown";
         String ua = userAgent.toLowerCase();
         if (ua.contains("android"))                            return "Android";
