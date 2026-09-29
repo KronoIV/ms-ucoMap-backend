@@ -21,8 +21,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class NavigationTripService {
 
-    /** Un recorrido sin cierre pasado este tiempo se da por abandonado (la app se cerró sin avisar). */
-    private static final Duration STALE_AFTER = Duration.ofHours(2);
+    /** La app avisa cada minuto mientras navega: sin avisos en este tiempo, el usuario salió sin cerrar. */
+    private static final Duration STALE_AFTER = Duration.ofMinutes(10);
+    private static final String TIMEOUT_REASON = "timeout";
 
     private final NavigationTripRepository repository;
 
@@ -37,6 +38,7 @@ public class NavigationTripService {
                     .deviceId(dto.deviceId())
                     .platform(DeviceSessionService.detectPlatform(userAgent))
                     .startedAt(ended && dto.durationMs() != null ? now.minusMillis(dto.durationMs()) : now)
+                    .lastSeenAt(now)
                     .build();
             apply(trip, dto, now);
             repository.save(trip);
@@ -48,9 +50,17 @@ public class NavigationTripService {
         if (!trip.getDeviceId().equals(dto.deviceId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, ErrorCode.CONFLICT.getMessage());
         }
-        // Reintentos del mismo aviso: un recorrido cerrado no se reabre ni se modifica
-        if (trip.getStatus() != TripStatus.IN_PROGRESS || dto.status() == TripStatus.IN_PROGRESS) return;
+        boolean inProgress = trip.getStatus() == TripStatus.IN_PROGRESS;
+        if (inProgress && dto.status() == TripStatus.IN_PROGRESS) {
+            trip.setLastSeenAt(now);
+            repository.save(trip);
+            return;
+        }
+        // Un cierre tardío (p. ej. volvió a la app y llegó) corrige el abandono automático
+        boolean timedOut = trip.getStatus() == TripStatus.ABANDONED && TIMEOUT_REASON.equals(trip.getEndReason());
+        if (dto.status() == TripStatus.IN_PROGRESS || !(inProgress || timedOut)) return;
 
+        trip.setLastSeenAt(now);
         apply(trip, dto, now);
         repository.save(trip);
         log.info("Recorrido {} — trip={} motivo={} duracion={}ms",
@@ -58,16 +68,25 @@ public class NavigationTripService {
     }
 
     public List<NavigationTrip> findAll() {
-        List<NavigationTrip> stale = repository.findByStatusAndStartedAtBefore(
-                TripStatus.IN_PROGRESS, Instant.now().minus(STALE_AFTER));
+        Instant cutoff = Instant.now().minus(STALE_AFTER);
+        List<NavigationTrip> stale = repository.findByStatus(TripStatus.IN_PROGRESS).stream()
+                .filter(t -> lastSeen(t).isBefore(cutoff))
+                .toList();
         if (!stale.isEmpty()) {
             stale.forEach(t -> {
+                Instant last = lastSeen(t);
                 t.setStatus(TripStatus.ABANDONED);
-                t.setEndReason("timeout");
+                t.setEndReason(TIMEOUT_REASON);
+                t.setEndedAt(last);
+                t.setDurationMs(Duration.between(t.getStartedAt(), last).toMillis());
             });
             repository.saveAll(stale);
         }
         return repository.findAllByOrderByStartedAtDesc();
+    }
+
+    private static Instant lastSeen(NavigationTrip trip) {
+        return trip.getLastSeenAt() != null ? trip.getLastSeenAt() : trip.getStartedAt();
     }
 
     private void apply(NavigationTrip trip, TripReportDTO dto, Instant now) {

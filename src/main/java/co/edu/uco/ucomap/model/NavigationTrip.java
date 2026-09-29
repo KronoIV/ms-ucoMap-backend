@@ -47,11 +47,13 @@ public class NavigationTrip {
 
     // ── Resultado ────────────────────────────────────────────
     private TripStatus status;
-    /** ar-arrival, building-arrival, closed, destination-changed, page-closed, timeout. */
+    /** ar-arrival, building-arrival, closed, destination-changed, page-closed, timeout (salió sin cerrar). */
     private String endReason;
 
     private Instant startedAt;
     private Instant endedAt;
+    /** Último aviso de la app mientras el recorrido estaba en curso. */
+    private Instant lastSeenAt;
     /** Duración medida en el dispositivo (ms). */
     private Long durationMs;
 
