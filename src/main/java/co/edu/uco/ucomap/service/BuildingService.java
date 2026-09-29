@@ -7,6 +7,7 @@ import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.MapConfigRepository;
 import co.edu.uco.ucomap.repository.PoiClipRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BuildingService {
@@ -59,10 +61,12 @@ public class BuildingService {
         String category = requireText(building.getCategory(), "category");
 
         if (buildingRepository.existsById(buildingId)) {
+            log.warn("Edificio duplicado — buildingId={}", buildingId);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
         if (buildingRepository.existsByCategoryIgnoreCase(category)) {
+            log.warn("Categoría de edificio duplicada — category={}", category);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
@@ -70,7 +74,9 @@ public class BuildingService {
         building.setBuildingId(buildingId);
         building.setCategory(category);
         building.setActive(true);
-        return buildingRepository.save(building);
+        Building saved = buildingRepository.save(building);
+        log.info("Edificio creado — buildingId={} category={}", buildingId, category);
+        return saved;
     }
 
     public Building update(String buildingId, Building updated) {
@@ -88,12 +94,15 @@ public class BuildingService {
         existing.setCategory(nextCategory);
         existing.setGps(updated.getGps());
         existing.setActive(updated.isActive());
-        return buildingRepository.save(existing);
+        Building saved = buildingRepository.save(existing);
+        log.info("Edificio actualizado — buildingId={}", buildingId);
+        return saved;
     }
 
     public void delete(String buildingId) {
         Building building = findById(buildingId);
         buildingRepository.delete(building);
+        log.info("Edificio eliminado — buildingId={}", buildingId);
     }
 
     private String requireText(String value, String fieldName) {
@@ -114,7 +123,9 @@ public class BuildingService {
 
     public MapConfig saveMapConfig(MapConfig config) {
         config.setId(CONFIG_ID);
-        return mapConfigRepository.save(config);
+        MapConfig saved = mapConfigRepository.save(config);
+        log.info("Configuración del mapa actualizada");
+        return saved;
     }
 
     // ── POI Clips ──────────────────────────────────────────────
@@ -130,7 +141,9 @@ public class BuildingService {
     }
 
     public PoiClip saveClip(PoiClip clip) {
-        return poiClipRepository.save(clip);
+        PoiClip saved = poiClipRepository.save(clip);
+        log.info("POI clip guardado — clipId={}", saved.getClipId());
+        return saved;
     }
 
     public void deleteClip(String clipId) {
@@ -138,6 +151,7 @@ public class BuildingService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
         poiClipRepository.delete(clip);
+        log.info("POI clip eliminado — clipId={}", clipId);
     }
 }
 

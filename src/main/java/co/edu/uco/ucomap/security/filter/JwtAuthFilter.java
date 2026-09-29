@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -54,12 +56,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 Optional<User> userOpt = userRepository.findByEmail(email);
 
                 if (userOpt.isEmpty() || !userOpt.get().isActive()) {
+                    log.warn("Token de usuario inexistente o inactivo — email={}", email);
                     request.setAttribute(AUTH_ERROR_ATTR, "AUTH_INACTIVE_USER");
                 } else {
                     User user = userOpt.get();
                     // Reject tokens issued before the last password change
                     if (user.getPasswordChangedAt() != null
                             && tokenIssuedAt.isBefore(user.getPasswordChangedAt())) {
+                        log.warn("Token emitido antes del último cambio de contraseña — userId={}", user.getId());
                         request.setAttribute(AUTH_ERROR_ATTR, "AUTH_TOKEN_INVALID");
                     } else {
                         String role = user.getRole().name();
@@ -75,8 +79,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             }
         } catch (ExpiredJwtException e) {
+            log.debug("Token expirado");
             request.setAttribute(AUTH_ERROR_ATTR, "AUTH_TOKEN_EXPIRED");
         } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Token inválido: {}", e.getMessage());
             request.setAttribute(AUTH_ERROR_ATTR, "AUTH_TOKEN_INVALID");
         }
 

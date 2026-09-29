@@ -85,10 +85,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/graph/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/cafeterias/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
+                .requestMatchers(HttpMethod.GET,   "/api/navigation/navmesh").permitAll()
 
                 // ── Protected: ADMIN only ──────────────────────────────────
                 .requestMatchers("/api/sessions/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
+                .requestMatchers("/api/multiset/**").hasRole("ADMIN")
+                .requestMatchers("/api/navigation/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH,  "/api/**").hasRole("ADMIN")

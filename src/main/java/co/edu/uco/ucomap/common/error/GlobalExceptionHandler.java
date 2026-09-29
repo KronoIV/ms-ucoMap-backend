@@ -22,6 +22,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException ex) {
         String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        if (ex.getStatusCode().is5xxServerError()) {
+            log.error("Error {}: {}", ex.getStatusCode().value(), message, ex);
+        } else {
+            log.warn("Petición rechazada {}: {}", ex.getStatusCode().value(), message);
+        }
         return ResponseEntity.status(ex.getStatusCode()).body(ApiError.of(message));
     }
 
@@ -33,25 +38,28 @@ public class GlobalExceptionHandler {
                         f -> f.getDefaultMessage() != null ? f.getDefaultMessage() : "Inválido",
                         (a, b) -> a
                 ));
+        log.warn("Validación fallida — campos={}", details.keySet());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiError.of(ErrorCode.VALIDATION_ERROR.getMessage(), details));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        log.warn("Cuerpo de la petición ilegible: {}", ex.getMostSpecificCause().getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiError.of(ErrorCode.VALIDATION_ERROR.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Acceso denegado: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiError.of(ErrorCode.AUTH_ACCESS_DENIED.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex) {
-        log.error("Unexpected error", ex);
+        log.error("Error inesperado", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiError.of(ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
     }

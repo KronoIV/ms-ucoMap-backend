@@ -6,6 +6,7 @@ import co.edu.uco.ucomap.model.NodeType;
 import co.edu.uco.ucomap.repository.GraphEdgeRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GraphService {
@@ -47,10 +49,13 @@ public class GraphService {
 
     public GraphNode createNode(GraphNode node) {
         if (nodeRepository.existsById(node.getNodeId())) {
+            log.warn("Nodo duplicado — nodeId={}", node.getNodeId());
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
-        return nodeRepository.save(node);
+        GraphNode saved = nodeRepository.save(node);
+        log.info("Nodo creado — nodeId={} type={}", saved.getNodeId(), saved.getNodeType());
+        return saved;
     }
 
     public GraphNode updateNode(String nodeId, GraphNode updated) {
@@ -60,7 +65,9 @@ public class GraphService {
         existing.setLabel(updated.getLabel());
         existing.setNodeType(updated.getNodeType());
         existing.setActive(updated.isActive());
-        return nodeRepository.save(existing);
+        GraphNode saved = nodeRepository.save(existing);
+        log.info("Nodo actualizado — nodeId={}", nodeId);
+        return saved;
     }
 
     public void deleteNode(String nodeId) {
@@ -70,6 +77,7 @@ public class GraphService {
         List<GraphEdge> edges = edgeRepository.findByNodeAOrNodeB(nodeId, nodeId);
         edges.forEach(e -> e.setActive(false));
         edgeRepository.saveAll(edges);
+        log.info("Nodo desactivado — nodeId={} aristasDesactivadas={}", nodeId, edges.size());
     }
 
     // ── Edges ─────────────────────────────────────────────────
@@ -94,7 +102,9 @@ public class GraphService {
     public GraphEdge createEdge(GraphEdge edge) {
         findNodeById(edge.getNodeA());
         findNodeById(edge.getNodeB());
-        return edgeRepository.save(edge);
+        GraphEdge saved = edgeRepository.save(edge);
+        log.info("Arista creada — {} <-> {}", saved.getNodeA(), saved.getNodeB());
+        return saved;
     }
 
     public void deleteEdge(String edgeId) {
@@ -103,6 +113,7 @@ public class GraphService {
                         HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
         edge.setActive(false);
         edgeRepository.save(edge);
+        log.info("Arista desactivada — edgeId={}", edgeId);
     }
 }
 

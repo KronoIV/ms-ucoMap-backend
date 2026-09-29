@@ -6,6 +6,7 @@ import co.edu.uco.ucomap.model.Role;
 import co.edu.uco.ucomap.model.User;
 import co.edu.uco.ucomap.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -34,6 +36,7 @@ public class UserService {
 
     public UserDTO.Response createUser(UserDTO.CreateRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("Creación de usuario rechazada: email ya registrado");
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
@@ -49,7 +52,9 @@ public class UserService {
                 .passwordChangedAt(now)
                 .build();
 
-        return toResponseDTO(userRepository.save(user));
+        User saved = userRepository.save(user);
+        log.info("Usuario creado — userId={}", saved.getId());
+        return toResponseDTO(saved);
     }
 
     public UserDTO.Response updateUser(String id, UserDTO.UpdateRequest request) {
@@ -78,12 +83,16 @@ public class UserService {
         }
 
         user.setUpdatedAt(Instant.now());
-        return toResponseDTO(userRepository.save(user));
+        User saved = userRepository.save(user);
+        log.info("Usuario actualizado — userId={} cambioEmail={} cambioPassword={} active={}",
+                id, request.getEmail() != null, request.getPassword() != null, saved.isActive());
+        return toResponseDTO(saved);
     }
 
     public void deleteUser(String id) {
         findOrThrow(id);
         userRepository.deleteById(id);
+        log.info("Usuario eliminado — userId={}", id);
     }
 
     private User findOrThrow(String id) {

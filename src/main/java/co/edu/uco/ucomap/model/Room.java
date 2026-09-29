@@ -49,6 +49,9 @@ public class Room {
     /** URL del modelo 3D (para uso futuro). */
     private String modelUrl;
 
+    /** Destino AR en el mapa MultiSet. Si es null, la app usa el clip {@code stateId} de la escena. */
+    private ArPoint arPosition;
+
     @Builder.Default
     private boolean active = true;
 }

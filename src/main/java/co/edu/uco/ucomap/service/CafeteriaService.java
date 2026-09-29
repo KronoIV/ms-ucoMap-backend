@@ -3,6 +3,7 @@ package co.edu.uco.ucomap.service;
 import co.edu.uco.ucomap.model.Cafeteria;
 import co.edu.uco.ucomap.repository.CafeteriaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CafeteriaService {
@@ -33,10 +35,13 @@ public class CafeteriaService {
 
     public Cafeteria create(Cafeteria cafeteria) {
         if (cafeteriaRepository.existsByCafeteriaId(cafeteria.getCafeteriaId())) {
+            log.warn("Cafetería duplicada — cafeteriaId={}", cafeteria.getCafeteriaId());
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
-        return cafeteriaRepository.save(cafeteria);
+        Cafeteria saved = cafeteriaRepository.save(cafeteria);
+        log.info("Cafetería creada — cafeteriaId={}", saved.getCafeteriaId());
+        return saved;
     }
 
     public Cafeteria update(String cafeteriaId, Cafeteria updated) {
@@ -47,12 +52,15 @@ public class CafeteriaService {
         existing.setLat(updated.getLat());
         existing.setLng(updated.getLng());
         existing.setActive(updated.isActive());
-        return cafeteriaRepository.save(existing);
+        Cafeteria saved = cafeteriaRepository.save(existing);
+        log.info("Cafetería actualizada — cafeteriaId={}", cafeteriaId);
+        return saved;
     }
 
     public void delete(String cafeteriaId) {
         Cafeteria cafeteria = findByCafeteriaId(cafeteriaId);
         cafeteriaRepository.delete(cafeteria);
+        log.info("Cafetería eliminada — cafeteriaId={}", cafeteriaId);
     }
 
     public Cafeteria patch(String cafeteriaId, Map<String, Object> fields) {
@@ -63,6 +71,8 @@ public class CafeteriaService {
         if (fields.containsKey("lat"))         cafeteria.setLat(((Number) fields.get("lat")).doubleValue());
         if (fields.containsKey("lng"))         cafeteria.setLng(((Number) fields.get("lng")).doubleValue());
         if (fields.containsKey("active"))      cafeteria.setActive((Boolean) fields.get("active"));
-        return cafeteriaRepository.save(cafeteria);
+        Cafeteria saved = cafeteriaRepository.save(cafeteria);
+        log.info("Cafetería modificada — cafeteriaId={} campos={}", cafeteriaId, fields.keySet());
+        return saved;
     }
 }

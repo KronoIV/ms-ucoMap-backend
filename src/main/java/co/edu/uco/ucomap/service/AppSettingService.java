@@ -5,6 +5,7 @@ import co.edu.uco.ucomap.model.AppSetting;
 import co.edu.uco.ucomap.model.SettingType;
 import co.edu.uco.ucomap.repository.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AppSettingService {
@@ -48,6 +50,7 @@ public class AppSettingService {
                     ErrorCode.VALIDATION_ERROR.getMessage());
         }
         if (repository.existsById(key)) {
+            log.warn("Parámetro duplicado — key={}", key);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
@@ -62,7 +65,9 @@ public class AppSettingService {
                 .updatedAt(Instant.now())
                 .build();
 
-        return toResponse(repository.save(setting));
+        AppSetting saved = repository.save(setting);
+        log.info("Parámetro creado — key={} type={}", key, saved.getType());
+        return toResponse(saved);
     }
 
     /** Actualiza el valor y metadatos de un parámetro existente. Lanza 404 si no existe. */
@@ -77,7 +82,9 @@ public class AppSettingService {
         if (request.category() != null) existing.setCategory(request.category());
         existing.setUpdatedAt(Instant.now());
 
-        return toResponse(repository.save(existing));
+        AppSetting saved = repository.save(existing);
+        log.info("Parámetro actualizado — key={}", key);
+        return toResponse(saved);
     }
 
     /** Elimina físicamente un parámetro. Lanza 404 si no existe. */
@@ -87,6 +94,7 @@ public class AppSettingService {
                     HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage());
         }
         repository.deleteById(key);
+        log.info("Parámetro eliminado — key={}", key);
     }
 
     // ── Utilidades ─────────────────────────────────────────────────────────────
@@ -110,6 +118,8 @@ public class AppSettingService {
                     .map(s -> (T) parseValue(s.getValue(), targetType))
                     .orElse(defaultValue);
         } catch (Exception e) {
+            log.warn("No se pudo leer el parámetro key={} como {}; se usa el valor por defecto: {}",
+                    key, targetType.getSimpleName(), e.getMessage());
             return defaultValue;
         }
     }

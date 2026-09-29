@@ -7,6 +7,7 @@ import co.edu.uco.ucomap.security.jwt.JwtUtil;
 import co.edu.uco.ucomap.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
@@ -37,6 +39,7 @@ public class AuthController {
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
             );
         } catch (AuthenticationException e) {
+            log.warn("Login fallido — email={} motivo={}", request.getEmail(), e.getClass().getSimpleName());
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, ErrorCode.AUTH_CREDENTIAL_INVALID.getMessage());
         }
 
@@ -48,6 +51,7 @@ public class AuthController {
                 .orElse("ADMIN");
 
         String token = jwtUtil.generateToken(email, role);
+        log.info("Login exitoso — email={} role={}", email, role);
         return ResponseEntity.ok(ApiSuccess.of(new AuthDTO.Response(token, email, role)));
     }
 
