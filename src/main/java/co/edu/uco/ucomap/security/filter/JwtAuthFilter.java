@@ -20,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,9 +61,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     request.setAttribute(AUTH_ERROR_ATTR, "AUTH_INACTIVE_USER");
                 } else {
                     User user = userOpt.get();
-                    // Reject tokens issued before the last password change
+                    // Reject tokens issued before the last password change (JWT iat has second precision)
                     if (user.getPasswordChangedAt() != null
-                            && tokenIssuedAt.isBefore(user.getPasswordChangedAt())) {
+                            && tokenIssuedAt.isBefore(user.getPasswordChangedAt().truncatedTo(ChronoUnit.SECONDS))) {
                         log.warn("Token emitido antes del último cambio de contraseña — userId={}", user.getId());
                         request.setAttribute(AUTH_ERROR_ATTR, "AUTH_TOKEN_INVALID");
                     } else {
