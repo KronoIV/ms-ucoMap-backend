@@ -14,6 +14,4 @@ public interface NavigationTripRepository extends MongoRepository<NavigationTrip
     Optional<NavigationTrip> findByTripId(String tripId);
 
     List<NavigationTrip> findByStatus(TripStatus status);
-
-    List<NavigationTrip> findAllByOrderByStartedAtDesc();
 }

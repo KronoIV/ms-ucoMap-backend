@@ -1,26 +1,38 @@
 package co.edu.uco.ucomap.service;
 
+import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.dto.PingRequestDTO;
 import co.edu.uco.ucomap.dto.StatsDTO;
 import co.edu.uco.ucomap.model.DeviceSession;
 import co.edu.uco.ucomap.repository.DeviceSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceSessionService {
 
+    static final Duration ACTIVE_WINDOW = Duration.ofMinutes(10);
+    static final Duration DAY_WINDOW    = Duration.ofHours(24);
+    private static final int MAX_QUERY_LENGTH = 100;
+
     private final DeviceSessionRepository repository;
     private final SessionEventPublisher    eventPublisher;
+    private final MongoTemplate            mongoTemplate;
 
     /**
      * Registra o actualiza la sesion de un dispositivo.
@@ -55,7 +67,7 @@ public class DeviceSessionService {
             log.info("Ping actualizado — deviceId={} platform={} sesiones={}",
                     deviceId, platform, session.getSessionCount());
             DeviceSession saved = repository.save(session);
-            eventPublisher.publishPing(saved, getStats());
+            notifyDashboards(saved);
             return saved;
         }
 
@@ -78,24 +90,69 @@ public class DeviceSessionService {
 
         log.info("Nuevo dispositivo — deviceId={} platform={} ip={}", deviceId, platform, ip);
         DeviceSession saved = repository.save(newSession);
-        eventPublisher.publishPing(saved, getStats());
+        notifyDashboards(saved);
         return saved;
     }
 
-
-    /** Estadisticas globales. */
-    public StatsDTO getStats() {
-        List<DeviceSession> all = repository.findAll();
-        long totalDevices  = all.size();
-        long totalSessions = all.stream().mapToLong(DeviceSession::getSessionCount).sum();
-        Map<String, Long> byPlatform = all.stream()
-                .collect(Collectors.groupingBy(DeviceSession::getPlatform, Collectors.counting()));
-        return new StatsDTO(totalDevices, totalSessions, byPlatform);
+    // Las estadísticas solo se calculan si hay un panel escuchando por SSE
+    private void notifyDashboards(DeviceSession saved) {
+        if (eventPublisher.connectedClients() == 0) return;
+        eventPublisher.publishPing(saved, getStats());
     }
 
-    /** Lista todos los dispositivos mas recientes primero. */
-    public List<DeviceSession> getAllSessions() {
-        return repository.findAllByOrderByLastSeenDesc();
+
+    /** Estadisticas globales, calculadas en MongoDB (sin cargar todos los dispositivos en memoria). */
+    public StatsDTO getStats() {
+        long totalDevices  = 0;
+        long totalSessions = 0;
+        Map<String, Long> byPlatform = new HashMap<>();
+        for (DeviceSessionRepository.PlatformStats p : repository.aggregateByPlatform()) {
+            totalDevices  += p.devices();
+            totalSessions += p.sessions();
+            byPlatform.merge(p.platform() != null ? p.platform() : "Unknown", p.devices(), Long::sum);
+        }
+        Instant now = Instant.now();
+        return new StatsDTO(totalDevices, totalSessions, byPlatform,
+                repository.countByLastSeenGreaterThanEqual(now.minus(ACTIVE_WINDOW)),
+                repository.countByLastSeenGreaterThanEqual(now.minus(DAY_WINDOW)));
+    }
+
+    /**
+     * Dispositivos más recientes primero.
+     * status: all | active (≤10 min) | today (10 min–24 h) | inactive (más de 24 h). q busca en id, plataforma, IP e idioma.
+     */
+    public PageResponse<DeviceSession> findPage(String q, String status, int page, int size) {
+        int p = PageResponse.safePage(page);
+        int s = PageResponse.safeSize(size);
+        Criteria criteria = statusCriteria(status, Instant.now());
+        if (q != null && !q.isBlank()) {
+            String text = q.strip();
+            if (text.length() > MAX_QUERY_LENGTH) text = text.substring(0, MAX_QUERY_LENGTH);
+            Pattern pattern = Pattern.compile(Pattern.quote(text), Pattern.CASE_INSENSITIVE);
+            criteria = new Criteria().andOperator(criteria, new Criteria().orOperator(
+                    Criteria.where("deviceId").regex(pattern),
+                    Criteria.where("platform").regex(pattern),
+                    Criteria.where("ipAddress").regex(pattern),
+                    Criteria.where("language").regex(pattern)));
+        }
+        Query query = new Query(criteria)
+                .with(Sort.by(Sort.Direction.DESC, "lastSeen"))
+                .skip((long) p * s)
+                .limit(s);
+        List<DeviceSession> content = mongoTemplate.find(query, DeviceSession.class);
+        long total = mongoTemplate.count(new Query(criteria), DeviceSession.class);
+        return PageResponse.of(content, p, s, total);
+    }
+
+    private static Criteria statusCriteria(String status, Instant now) {
+        Instant active = now.minus(ACTIVE_WINDOW);
+        Instant day = now.minus(DAY_WINDOW);
+        return switch (status == null ? "all" : status) {
+            case "active" -> Criteria.where("lastSeen").gte(active);
+            case "today" -> Criteria.where("lastSeen").gte(day).lt(active);
+            case "inactive" -> Criteria.where("lastSeen").lt(day);
+            default -> new Criteria();
+        };
     }
 
     // ── Deteccion de plataforma ────────────────────────────────

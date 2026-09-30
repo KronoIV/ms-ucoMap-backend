@@ -1,6 +1,8 @@
 package co.edu.uco.ucomap.controller;
 
 import co.edu.uco.ucomap.common.dto.ApiSuccess;
+import co.edu.uco.ucomap.common.dto.PageResponse;
+import co.edu.uco.ucomap.common.web.ClientIpResolver;
 import co.edu.uco.ucomap.dto.PingRequestDTO;
 import co.edu.uco.ucomap.dto.StatsDTO;
 import co.edu.uco.ucomap.model.DeviceSession;
@@ -13,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -25,7 +26,7 @@ import java.util.UUID;
  *
  * POST /api/sessions/ping   — registrar/actualizar sesion (sin body)
  * GET  /api/sessions/stats  — estadisticas globales
- * GET  /api/sessions        — lista de dispositivos
+ * GET  /api/sessions        — página de dispositivos (filtros q y status)
  */
 @RestController
 @RequestMapping("/api/sessions")
@@ -34,6 +35,7 @@ public class DeviceSessionController {
 
     private final DeviceSessionService  sessionService;
     private final SessionEventPublisher eventPublisher;
+    private final ClientIpResolver      clientIpResolver;
 
     /**
      * El cliente envia su deviceId (UUID persistido en localStorage).
@@ -65,8 +67,12 @@ public class DeviceSessionController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiSuccess<List<DeviceSession>>> getAllSessions() {
-        return ResponseEntity.ok(ApiSuccess.of(sessionService.getAllSessions()));
+    public ResponseEntity<ApiSuccess<PageResponse<DeviceSession>>> getSessions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "all") String status) {
+        return ResponseEntity.ok(ApiSuccess.of(sessionService.findPage(q, status, page, size)));
     }
 
     /**
@@ -88,11 +94,7 @@ public class DeviceSessionController {
     // ── Helpers ───────────────────────────────────────────────
 
     private String extractIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 
     /** Extrae el idioma principal del header Accept-Language (ej. "es-CO"). */

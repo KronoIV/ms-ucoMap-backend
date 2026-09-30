@@ -1,11 +1,14 @@
 package co.edu.uco.ucomap.security;
 
 import co.edu.uco.ucomap.common.config.CorsConfig;
+import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.common.error.ErrorCode;
+import co.edu.uco.ucomap.common.web.ClientIpResolver;
 import co.edu.uco.ucomap.controller.AuthController;
 import co.edu.uco.ucomap.controller.GraphController;
 import co.edu.uco.ucomap.controller.NavigationTripController;
 import co.edu.uco.ucomap.controller.UserController;
+import co.edu.uco.ucomap.dto.TripFilter;
 import co.edu.uco.ucomap.dto.TripReportDTO;
 import co.edu.uco.ucomap.model.Role;
 import co.edu.uco.ucomap.model.TripStatus;
@@ -38,6 +41,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -54,7 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = {AuthController.class, GraphController.class,
         NavigationTripController.class, UserController.class})
-@Import({SecurityConfig.class, CorsConfig.class, JwtUtil.class, UserDetailsServiceImpl.class})
+@Import({SecurityConfig.class, CorsConfig.class, JwtUtil.class, UserDetailsServiceImpl.class, ClientIpResolver.class})
 class SecurityIntegrationTest {
 
     private static final String EMAIL = "admin@uco.edu.co";
@@ -148,8 +152,41 @@ class SecurityIntegrationTest {
         mvc.perform(post("/api/graph/nodes").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized());
 
-        verify(tripService, never()).findAll();
+        verify(tripService, never()).findPage(any(), anyInt(), anyInt());
         verify(graphService, never()).createNode(any());
+    }
+
+    @Test
+    void adminGetsPagedTripsWithFilters() throws Exception {
+        when(tripService.findPage(any(), eq(1), eq(50))).thenReturn(PageResponse.of(List.of(), 1, 50, 75));
+
+        mvc.perform(get("/api/trips").header("Authorization", bearer())
+                        .param("page", "1").param("size", "50")
+                        .param("from", "2026-09-01T05:00:00Z").param("building", "CO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(75))
+                .andExpect(jsonPath("$.data.totalPages").value(2));
+
+        verify(tripService).findPage(
+                eq(new TripFilter(Instant.parse("2026-09-01T05:00:00Z"), null, "CO")), eq(1), eq(50));
+    }
+
+    @Test
+    void invalidDateParameterIsBadRequest() throws Exception {
+        mvc.perform(get("/api/trips/summary").header("Authorization", bearer()).param("from", "ayer"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.from").exists());
+    }
+
+    @Test
+    void tripsExportIsCsvAttachment() throws Exception {
+        when(tripService.exportCsv(any())).thenReturn("Inicio,Fin\n");
+
+        mvc.perform(get("/api/trips/export").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentType()).startsWith("text/csv"))
+                .andExpect(result -> assertThat(result.getResponse().getHeader("Content-Disposition"))
+                        .contains("attachment").contains("recorridos-ucomap.csv"));
     }
 
     @Test

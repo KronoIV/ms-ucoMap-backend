@@ -1,0 +1,51 @@
+# Entorno aislado para pruebas de carga: MongoDB propio + backend + k6.
+# Nunca toca la base de datos de producción.
+#
+#   docker compose -f load-tests/docker-compose.yml up -d --build mongo backend
+#   docker compose -f load-tests/docker-compose.yml run --rm k6 run /scripts/app-traffic.js
+#   docker compose -f load-tests/docker-compose.yml down -v
+
+services:
+
+  mongo:
+    image: mongo:7
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ..
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    ulimits:
+      nofile: 65536
+    # Los argumentos tienen prioridad sobre application.properties
+    command:
+      - --spring.data.mongodb.uri=mongodb://mongo:27017/ucomap-load
+      - --app.data.init-on-startup=true
+      - --app.jwt.secret=load-test-secret-not-for-production-0123456789
+      # Todo el tráfico de k6 sale de una sola IP: sin esto casi todo sería 429
+      - --app.rate-limit.max-requests=100000000
+      - --logging.level.co.edu.uco.ucomap=WARN
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/settings"]
+      interval: 5s
+      retries: 30
+      start_period: 20s
+
+  k6:
+    image: grafana/k6:latest
+    profiles: ["k6"]
+    ulimits:
+      nofile: 65536
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://backend:8080
+    volumes:
+      - ./k6:/scripts:ro

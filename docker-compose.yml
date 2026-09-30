@@ -17,6 +17,7 @@ services:
       - INIT_DATA
       - CORS_ORIGINS
       - RATE_LIMIT_MAX
+      - RATE_LIMIT_AUTH_MAX
       - RATE_LIMIT_WINDOW
       - RATE_LIMIT_TRUSTED_PROXIES
       - MAIL_HOST

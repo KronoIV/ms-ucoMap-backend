@@ -2,6 +2,7 @@ package co.edu.uco.ucomap.security.filter;
 
 import co.edu.uco.ucomap.common.dto.ApiError;
 import co.edu.uco.ucomap.common.error.ErrorCode;
+import co.edu.uco.ucomap.common.web.ClientIpResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,56 +15,48 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import jakarta.annotation.PostConstruct;
-
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.Deque;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
+    private static final String AUTH_PREFIX = "/api/auth/";
+
+    /** Límite general por IP. Debe ser holgado: en el Wi-Fi del campus muchos estudiantes comparten IP pública. */
     @Value("${app.rate-limit.max-requests}")
     private int maxRequests;
 
+    /** Límite estricto para login y recuperación de contraseña (fuerza bruta, spam de correos). */
+    @Value("${app.rate-limit.auth-max-requests}")
+    private int authMaxRequests;
+
     @Value("${app.rate-limit.window-seconds}")
     private long windowSeconds;
-
-    @Value("${app.rate-limit.trusted-proxies}")
-    private String trustedProxiesConfig;
-
-    private Set<String> trustedProxies;
 
     private final ConcurrentHashMap<String, Deque<Long>> requestLog = new ConcurrentHashMap<>();
     private final AtomicLong lastCleanup = new AtomicLong(System.currentTimeMillis());
 
     private final ObjectMapper objectMapper;
-
-    @PostConstruct
-    void init() {
-        trustedProxies = Arrays.stream(trustedProxiesConfig.split(","))
-                .map(String::strip)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
-    }
+    private final ClientIpResolver clientIpResolver;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
 
-        String ip = resolveClientIp(request);
+        String ip = clientIpResolver.resolve(request);
+        boolean auth = request.getRequestURI().startsWith(AUTH_PREFIX);
+        int limit = auth ? authMaxRequests : maxRequests;
         long now = System.currentTimeMillis();
         long windowMillis = windowSeconds * 1000L;
 
-        Deque<Long> timestamps = requestLog.computeIfAbsent(ip, k -> new ArrayDeque<>());
+        Deque<Long> timestamps = requestLog.computeIfAbsent(auth ? "auth|" + ip : ip, k -> new ArrayDeque<>());
 
         synchronized (timestamps) {
             long windowStart = now - windowMillis;
@@ -71,7 +64,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 timestamps.pollFirst();
             }
 
-            if (timestamps.size() >= maxRequests) {
+            if (timestamps.size() >= limit) {
                 log.warn("Rate limit excedido — ip={} path={}", ip, request.getRequestURI());
                 response.setStatus(429);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -100,17 +93,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 }
             });
         }
-    }
-
-    // X-Forwarded-For is only trusted when the direct connection comes from a configured proxy
-    private String resolveClientIp(HttpServletRequest request) {
-        String remoteAddr = request.getRemoteAddr();
-        if (!trustedProxies.isEmpty() && trustedProxies.contains(remoteAddr)) {
-            String forwarded = request.getHeader("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                return forwarded.split(",")[0].strip();
-            }
-        }
-        return remoteAddr;
     }
 }

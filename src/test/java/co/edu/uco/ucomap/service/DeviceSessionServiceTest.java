@@ -1,5 +1,6 @@
 package co.edu.uco.ucomap.service;
 
+import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.dto.PingRequestDTO;
 import co.edu.uco.ucomap.model.DeviceSession;
 import co.edu.uco.ucomap.repository.DeviceSessionRepository;
@@ -8,9 +9,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +32,7 @@ class DeviceSessionServiceTest {
 
     @Mock DeviceSessionRepository repository;
     @Mock SessionEventPublisher eventPublisher;
+    @Mock MongoTemplate mongoTemplate;
     @InjectMocks DeviceSessionService service;
 
     @ParameterizedTest
@@ -55,6 +61,7 @@ class DeviceSessionServiceTest {
     void firstPingRegistersDeviceWithHeaderLanguageFallback() {
         when(repository.findByDeviceId("d1")).thenReturn(Optional.empty());
         when(repository.save(any(DeviceSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(eventPublisher.connectedClients()).thenReturn(1);
         PingRequestDTO body = new PingRequestDTO("d1", "iPhone 14", "iOS 17.4", "1.0.0", null,
                 "America/Bogota", "390x844", "wifi");
 
@@ -86,16 +93,62 @@ class DeviceSessionServiceTest {
     }
 
     @Test
+    void pingWithoutOpenDashboardsSkipsStats() {
+        // Calcular estadísticas en cada ping agotó la memoria en la prueba de carga (~870 usuarios)
+        when(repository.findByDeviceId("d1")).thenReturn(Optional.empty());
+        when(repository.save(any(DeviceSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(eventPublisher.connectedClients()).thenReturn(0);
+
+        service.registerPing("d1", null, "Mozilla/5.0 (iPhone)", "1.2.3.4", "es-CO");
+
+        verify(repository, never()).aggregateByPlatform();
+        verify(repository, never()).findAll();
+        verify(eventPublisher, never()).publishPing(any(), any());
+    }
+
+    @Test
     void statsAggregateDevicesSessionsAndPlatforms() {
-        when(repository.findAll()).thenReturn(List.of(
-                DeviceSession.builder().platform("iOS").sessionCount(3).build(),
-                DeviceSession.builder().platform("iOS").sessionCount(2).build(),
-                DeviceSession.builder().platform("Android").sessionCount(5).build()));
+        when(repository.aggregateByPlatform()).thenReturn(List.of(
+                new DeviceSessionRepository.PlatformStats("iOS", 2, 5),
+                new DeviceSessionRepository.PlatformStats("Android", 1, 5),
+                new DeviceSessionRepository.PlatformStats(null, 1, 1)));
+        when(repository.countByLastSeenGreaterThanEqual(any())).thenReturn(1L, 3L);
 
         var stats = service.getStats();
 
-        assertThat(stats.totalDevices()).isEqualTo(3);
-        assertThat(stats.totalSessions()).isEqualTo(10);
-        assertThat(stats.byPlatform()).containsEntry("iOS", 2L).containsEntry("Android", 1L);
+        assertThat(stats.totalDevices()).isEqualTo(4);
+        assertThat(stats.totalSessions()).isEqualTo(11);
+        assertThat(stats.byPlatform())
+                .containsEntry("iOS", 2L).containsEntry("Android", 1L).containsEntry("Unknown", 1L);
+        assertThat(stats.activeNow()).isEqualTo(1);
+        assertThat(stats.activeToday()).isEqualTo(3);
+        verify(repository, never()).findAll();
+    }
+
+    @Test
+    void searchIsLiteralAndSizeIsCapped() {
+        // Un texto como ".*" no debe convertirse en una expresión regular que recorra todo
+        service.findPage(".*", "active", 0, 1_000);
+
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(mongoTemplate).find(query.capture(), eq(DeviceSession.class));
+        String json = query.getValue().getQueryObject().toString();
+        assertThat(json).contains("\\Q.*\\E").contains("lastSeen");
+        assertThat(query.getValue().getLimit()).isEqualTo(PageResponse.MAX_SIZE);
+        assertThat(query.getValue().getSortObject().toJson()).contains("\"lastSeen\": -1");
+    }
+
+    @Test
+    void pageReportsTotals() {
+        when(mongoTemplate.find(any(Query.class), eq(DeviceSession.class)))
+                .thenReturn(List.of(DeviceSession.builder().deviceId("d1").build()));
+        when(mongoTemplate.count(any(Query.class), eq(DeviceSession.class))).thenReturn(21L);
+
+        PageResponse<DeviceSession> page = service.findPage(null, "all", 2, 10);
+
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.page()).isEqualTo(2);
+        assertThat(page.totalElements()).isEqualTo(21);
+        assertThat(page.totalPages()).isEqualTo(3);
     }
 }
