@@ -87,6 +87,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/cafeterias/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/navigation/navmesh").permitAll()
+                .requestMatchers(HttpMethod.POST,  "/api/multiset/token").permitAll()
 
                 // ── Protected: ADMIN only ──────────────────────────────────
                 .requestMatchers("/api/sessions/**").hasRole("ADMIN")

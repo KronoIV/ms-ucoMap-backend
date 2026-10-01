@@ -2,6 +2,7 @@ package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import co.edu.uco.ucomap.dto.MapMeshDTO;
+import co.edu.uco.ucomap.dto.VpsTokenDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,25 +28,53 @@ import java.util.List;
 @Service
 public class MultiSetService {
 
-    private static final Duration TOKEN_TTL = Duration.ofMinutes(30);
+    // MultiSet emite tokens de 30 min; margen para no entregar uno a punto de vencer
+    private static final Duration TOKEN_TTL = Duration.ofMinutes(25);
+    private static final Duration VPS_TOKEN_MIN_REMAINING = Duration.ofMinutes(5);
 
     private final RestClient client;
     private final String clientId;
     private final String clientSecret;
     private final String mapSetCode;
-
-    private String cachedToken;
-    private Instant tokenExpiresAt = Instant.EPOCH;
+    private final TokenCache adminTokens;
+    private final TokenCache vpsTokens;
 
     public MultiSetService(
             @Value("${app.multiset.api-endpoint}") String apiEndpoint,
             @Value("${app.multiset.client-id}") String clientId,
             @Value("${app.multiset.client-secret}") String clientSecret,
-            @Value("${app.multiset.map-set-code}") String mapSetCode) {
+            @Value("${app.multiset.map-set-code}") String mapSetCode,
+            @Value("${app.multiset.query-client-id:}") String queryClientId,
+            @Value("${app.multiset.query-client-secret:}") String queryClientSecret) {
         this.client = RestClient.builder().baseUrl(apiEndpoint).build();
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.mapSetCode = mapSetCode;
+        this.adminTokens = new TokenCache(clientId, clientSecret);
+        if (queryClientId.isBlank() || queryClientSecret.isBlank()) {
+            log.warn("MULTISET_QUERY_CLIENT_ID/SECRET no configurados: los tokens VPS públicos usan la credencial principal. "
+                    + "Cree una credencial con alcance solo Query en el portal de MultiSet.");
+            this.vpsTokens = adminTokens;
+        } else {
+            this.vpsTokens = new TokenCache(queryClientId, queryClientSecret);
+        }
+    }
+
+    /** Token de corta duración para que la app localice contra el map set sin conocer el secreto. */
+    public VpsTokenDTO getVpsToken() {
+        if (vpsTokens.clientId.isBlank() || vpsTokens.clientSecret.isBlank() || mapSetCode.isBlank()) {
+            log.error("MultiSet no configurado para tokens VPS");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    ErrorCode.INTERNAL_SERVER_ERROR.getMessage());
+        }
+        try {
+            TokenCache.Entry entry = vpsTokens.get(VPS_TOKEN_MIN_REMAINING);
+            return new VpsTokenDTO(entry.token(), entry.expiresAt(), mapSetCode);
+        } catch (RestClientException e) {
+            log.error("Error obteniendo token VPS de MultiSet: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    ErrorCode.INTERNAL_SERVER_ERROR.getMessage());
+        }
     }
 
     public List<MapMeshDTO> getMapMeshes(boolean textured) {
@@ -94,20 +123,38 @@ public class MultiSetService {
         }
     }
 
-    private synchronized String getToken() {
-        if (cachedToken != null && Instant.now().isBefore(tokenExpiresAt)) {
-            return cachedToken;
+    private String getToken() {
+        return adminTokens.get(Duration.ZERO).token();
+    }
+
+    private final class TokenCache {
+        record Entry(String token, Instant expiresAt) {}
+
+        private final String clientId;
+        private final String clientSecret;
+        private Entry current;
+
+        TokenCache(String clientId, String clientSecret) {
+            this.clientId = clientId;
+            this.clientSecret = clientSecret;
         }
-        String basic = Base64.getEncoder()
-                .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
-        JsonNode body = client.post()
-                .uri("m2m/token")
-                .header(HttpHeaders.AUTHORIZATION, "Basic " + basic)
-                .retrieve()
-                .body(JsonNode.class);
-        cachedToken = body.path("token").asText();
-        tokenExpiresAt = Instant.now().plus(TOKEN_TTL);
-        log.debug("Token MultiSet renovado");
-        return cachedToken;
+
+        synchronized Entry get(Duration minRemaining) {
+            if (current != null && Instant.now().plus(minRemaining).isBefore(current.expiresAt())) {
+                return current;
+            }
+            String basic = Base64.getEncoder()
+                    .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
+            JsonNode body = client.post()
+                    .uri("m2m/token")
+                    .header(HttpHeaders.AUTHORIZATION, "Basic " + basic)
+                    .retrieve()
+                    .body(JsonNode.class);
+            String token = body == null ? "" : body.path("token").asText("");
+            if (token.isEmpty()) throw new RestClientException("MultiSet no devolvió token");
+            current = new Entry(token, Instant.now().plus(TOKEN_TTL));
+            log.debug("Token MultiSet renovado");
+            return current;
+        }
     }
 }
