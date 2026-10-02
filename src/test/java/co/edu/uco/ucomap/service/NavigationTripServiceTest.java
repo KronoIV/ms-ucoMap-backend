@@ -80,6 +80,22 @@ class NavigationTripServiceTest {
     }
 
     @Test
+    void startPointIsStoredWithAtMostFourDecimals() {
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.empty());
+        TripReportDTO r = report(DEVICE, TripStatus.IN_PROGRESS, null, null);
+        TripReportDTO withStart = new TripReportDTO(r.tripId(), r.deviceId(), r.status(), r.roomId(), r.roomName(),
+                r.building(), r.startMode(), r.startDistanceM(), r.startAccuracyM(), r.endReason(), r.durationMs(),
+                r.buildingReachedMs(), r.localizedMs(), r.outdoorRouteM(), r.indoorRouteM(), r.modeSwitches(),
+                r.vpsFailures(), r.usedAR(), 6.14987954, -75.36605391);
+
+        service.report(withStart, IPHONE_UA);
+
+        NavigationTrip trip = savedTrip();
+        assertThat(trip.getStartLat()).isEqualTo(6.1499);
+        assertThat(trip.getStartLng()).isEqualTo(-75.3661);
+    }
+
+    @Test
     void finalReportWithoutStartBackdatesStartFromDuration() {
         // El aviso de inicio se perdió: el cierre crea el recorrido completo
         when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.empty());

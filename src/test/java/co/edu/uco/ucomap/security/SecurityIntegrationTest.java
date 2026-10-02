@@ -4,6 +4,7 @@ import co.edu.uco.ucomap.common.config.CorsConfig;
 import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import co.edu.uco.ucomap.common.web.ClientIpResolver;
+import co.edu.uco.ucomap.controller.AnalyticsController;
 import co.edu.uco.ucomap.controller.AuthController;
 import co.edu.uco.ucomap.controller.GraphController;
 import co.edu.uco.ucomap.controller.MultiSetController;
@@ -20,6 +21,7 @@ import co.edu.uco.ucomap.security.config.SecurityConfig;
 import co.edu.uco.ucomap.security.jwt.JwtUtil;
 import co.edu.uco.ucomap.security.jwt.JwtUtilTest;
 import co.edu.uco.ucomap.security.service.UserDetailsServiceImpl;
+import co.edu.uco.ucomap.service.AnalyticsService;
 import co.edu.uco.ucomap.service.GraphService;
 import co.edu.uco.ucomap.service.MultiSetService;
 import co.edu.uco.ucomap.service.NavigationTripService;
@@ -61,7 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * No usa base de datos.
  */
 @WebMvcTest(controllers = {AuthController.class, GraphController.class,
-        NavigationTripController.class, UserController.class, MultiSetController.class})
+        NavigationTripController.class, UserController.class, MultiSetController.class, AnalyticsController.class})
 @Import({SecurityConfig.class, CorsConfig.class, JwtUtil.class, UserDetailsServiceImpl.class, ClientIpResolver.class})
 class SecurityIntegrationTest {
 
@@ -79,6 +81,7 @@ class SecurityIntegrationTest {
     @MockitoBean UserService userService;
     @MockitoBean PasswordResetService passwordResetService;
     @MockitoBean MultiSetService multiSetService;
+    @MockitoBean AnalyticsService analyticsService;
 
     @BeforeEach
     void setUp() {
@@ -213,6 +216,24 @@ class SecurityIntegrationTest {
                 .andExpect(result -> assertThat(result.getResponse().getContentType()).startsWith("text/csv"))
                 .andExpect(result -> assertThat(result.getResponse().getHeader("Content-Disposition"))
                         .contains("attachment").contains("recorridos-ucomap.csv"));
+    }
+
+    @Test
+    void analyticsIsAdminOnlyAndValidatesThePeriod() throws Exception {
+        mvc.perform(get("/api/analytics")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/analytics/trips")).andExpect(status().isUnauthorized());
+        verify(analyticsService, never()).overview(any());
+
+        mvc.perform(get("/api/analytics").header("Authorization", bearer())
+                        .param("from", "2026-09-10T05:00:00Z").param("to", "2026-09-01T05:00:00Z"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/analytics/trips").header("Authorization", bearer())
+                        .param("from", "2026-09-01T05:00:00Z").param("to", "2026-09-08T05:00:00Z")
+                        .param("platform", "iOS").param("building", "CO"))
+                .andExpect(status().isOk());
+        verify(analyticsService).trips(eq(new AnalyticsService.Range(Instant.parse("2026-09-01T05:00:00Z"),
+                Instant.parse("2026-09-08T05:00:00Z"), java.time.ZoneId.of("America/Bogota"), "iOS", "CO")));
     }
 
     @Test

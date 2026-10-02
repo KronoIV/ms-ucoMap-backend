@@ -1,6 +1,8 @@
 package co.edu.uco.ucomap.dto;
 
 import co.edu.uco.ucomap.model.TripStatus;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -71,5 +73,23 @@ public record TripReportDTO(
         @PositiveOrZero @Max(1000)
         Integer vpsFailures,
 
-        Boolean usedAR
-) {}
+        Boolean usedAR,
+
+        // Punto de partida redondeado por la app a 4 decimales (~11 m); solo si hay permiso de ubicación
+        @DecimalMin("-90") @DecimalMax("90")
+        Double startLat,
+
+        @DecimalMin("-180") @DecimalMax("180")
+        Double startLng
+) {
+    /** Reporte de versiones anteriores de la app (sin punto de partida). */
+    public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
+                         String building, String startMode, Double startDistanceM, Double startAccuracyM,
+                         String endReason, Long durationMs, Long buildingReachedMs, Long localizedMs,
+                         Double outdoorRouteM, Double indoorRouteM, Integer modeSwitches, Integer vpsFailures,
+                         Boolean usedAR) {
+        this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
+                endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
+                vpsFailures, usedAR, null, null);
+    }
+}

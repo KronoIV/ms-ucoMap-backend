@@ -44,6 +44,9 @@ public class NavigationTrip {
     /** Distancia en línea recta al edificio al iniciar (m), si había GPS. */
     private Double startDistanceM;
     private Double startAccuracyM;
+    /** Punto de partida (4 decimales, ~11 m), si la app tenía permiso de ubicación. */
+    private Double startLat;
+    private Double startLng;
 
     // ── Resultado ────────────────────────────────────────────
     private TripStatus status;

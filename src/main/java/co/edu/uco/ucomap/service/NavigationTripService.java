@@ -159,7 +159,8 @@ public class NavigationTripService {
         return csv.toString();
     }
 
-    private void expireStaleTrips() {
+    /** Cierra como abandonados los recorridos sin avisos recientes (la app se cerró sin poder avisar). */
+    public void expireStaleTrips() {
         Instant cutoff = Instant.now().minus(STALE_AFTER);
         List<NavigationTrip> stale = repository.findByStatus(TripStatus.IN_PROGRESS).stream()
                 .filter(t -> lastSeen(t).isBefore(cutoff))
@@ -186,6 +187,10 @@ public class NavigationTripService {
         trip.setStartMode(dto.startMode());
         trip.setStartDistanceM(dto.startDistanceM());
         trip.setStartAccuracyM(dto.startAccuracyM());
+        if (dto.startLat() != null && dto.startLng() != null) {
+            trip.setStartLat(round4(dto.startLat()));
+            trip.setStartLng(round4(dto.startLng()));
+        }
         trip.setStatus(dto.status());
         if (dto.status() == TripStatus.IN_PROGRESS) return;
 
@@ -202,6 +207,11 @@ public class NavigationTripService {
     }
 
     // ── Métricas ──────────────────────────────────────────────
+
+    /** Aunque el cliente envíe más precisión, no se guarda más de ~11 m. */
+    private static double round4(double v) {
+        return Math.round(v * 10_000d) / 10_000d;
+    }
 
     private static final class Stats {
         final String building;

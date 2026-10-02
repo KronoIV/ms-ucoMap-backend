@@ -92,6 +92,7 @@ public class SecurityConfig {
                 // ── Protected: ADMIN only ──────────────────────────────────
                 .requestMatchers("/api/sessions/**").hasRole("ADMIN")
                 .requestMatchers("/api/trips/**").hasRole("ADMIN")
+                .requestMatchers("/api/analytics/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers("/api/multiset/**").hasRole("ADMIN")
                 .requestMatchers("/api/navigation/**").hasRole("ADMIN")

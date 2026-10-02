@@ -19,11 +19,12 @@ public interface DeviceSessionRepository extends MongoRepository<DeviceSession, 
     long countByLastSeenGreaterThanEqual(Instant since);
 
     @Aggregation({
-            "{ $group: { _id: '$platform', devices: { $sum: 1 }, sessions: { $sum: '$sessionCount' } } }",
-            "{ $project: { _id: 0, platform: '$_id', devices: 1, sessions: 1 } }"
+        "{ $group: { _id: '$platform', devices: { $sum: 1 }, sessions: { $sum: '$sessionCount' }, "
+            + "visits: { $sum: { $ifNull: ['$visitCount', 0] } }, activeMs: { $sum: { $ifNull: ['$totalActiveMs', 0] } } } }",
+        "{ $project: { _id: 0, platform: '$_id', devices: 1, sessions: 1, visits: 1, activeMs: 1 } }"
     })
     List<PlatformStats> aggregateByPlatform();
 
-    record PlatformStats(String platform, long devices, long sessions) {}
+    record PlatformStats(String platform, long devices, long sessions, long visits, long activeMs) {}
 }
 

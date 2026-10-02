@@ -70,7 +70,21 @@ public class DeviceSession {
     /** Fecha y hora de la ultima conexion */
     private Instant lastSeen;
 
-    /** Cantidad de veces que este dispositivo ha hecho ping */
+    /**
+     * Cantidad de pings recibidos (la app avisa cada 2 min, en cada pantalla y al cerrar).
+     * No son visitas: el número de visitas reales es visitCount.
+     */
     @Builder.Default
     private int sessionCount = 1;
+
+    /** Visitas reales (app_sessions) de este dispositivo. 0 en dispositivos anteriores a esta medición. */
+    @Builder.Default
+    private int visitCount = 0;
+
+    /** Suma del tiempo de uso real de todas sus visitas (ms). */
+    @Builder.Default
+    private long totalActiveMs = 0;
+
+    /** Último estado de permisos reportado. */
+    private PermissionSnapshot permissions;
 }
