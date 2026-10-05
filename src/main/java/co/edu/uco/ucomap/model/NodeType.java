@@ -6,6 +6,8 @@ public enum NodeType {
     BUILDING,
     /** Entrada principal al campus (E1, E2, E3) */
     ENTRANCE,
+    /** Puerta de un edificio, sobre la fachada y conectada al nodo BUILDING: ahí termina la ruta exterior */
+    DOOR,
     /** Intersección o punto de paso interno (P1–P15…) */
     WAYPOINT
 }

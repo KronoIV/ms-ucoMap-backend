@@ -73,4 +73,7 @@ public class NavigationTrip {
     private Integer modeSwitches;
     private Integer vpsFailures;
     private Boolean usedAR;
+
+    /** Cómo se decidió el paso exterior → interior. */
+    private TransitionStats transition;
 }

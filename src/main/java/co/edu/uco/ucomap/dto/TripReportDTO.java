@@ -1,6 +1,8 @@
 package co.edu.uco.ucomap.dto;
 
+import co.edu.uco.ucomap.model.TransitionStats;
 import co.edu.uco.ucomap.model.TripStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -80,7 +82,11 @@ public record TripReportDTO(
         Double startLat,
 
         @DecimalMin("-180") @DecimalMax("180")
-        Double startLng
+        Double startLng,
+
+        // Cómo se decidió el paso a interior (solo en el reporte final)
+        @Valid
+        TransitionStats transition
 ) {
     /** Reporte de versiones anteriores de la app (sin punto de partida). */
     public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
@@ -91,5 +97,16 @@ public record TripReportDTO(
         this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
                 endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
                 vpsFailures, usedAR, null, null);
+    }
+
+    /** Reporte de versiones anteriores de la app (sin datos de la transición). */
+    public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
+                         String building, String startMode, Double startDistanceM, Double startAccuracyM,
+                         String endReason, Long durationMs, Long buildingReachedMs, Long localizedMs,
+                         Double outdoorRouteM, Double indoorRouteM, Integer modeSwitches, Integer vpsFailures,
+                         Boolean usedAR, Double startLat, Double startLng) {
+        this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
+                endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
+                vpsFailures, usedAR, startLat, startLng, null);
     }
 }

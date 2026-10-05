@@ -32,7 +32,7 @@ public class GraphNode {
     /** Etiqueta visible (solo para BUILDING y ENTRANCE). */
     private String label;
 
-    /** Tipo del nodo: BUILDING, ENTRANCE o WAYPOINT. */
+    /** Tipo del nodo: BUILDING, ENTRANCE, DOOR o WAYPOINT. */
     @Indexed
     private NodeType nodeType;
 

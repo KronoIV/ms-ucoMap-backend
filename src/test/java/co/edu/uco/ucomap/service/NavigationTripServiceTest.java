@@ -5,6 +5,7 @@ import co.edu.uco.ucomap.dto.TripFilter;
 import co.edu.uco.ucomap.dto.TripReportDTO;
 import co.edu.uco.ucomap.dto.TripSummaryDTO;
 import co.edu.uco.ucomap.model.NavigationTrip;
+import co.edu.uco.ucomap.model.TransitionStats;
 import co.edu.uco.ucomap.model.TripStatus;
 import co.edu.uco.ucomap.repository.NavigationTripRepository;
 import org.junit.jupiter.api.Test;
@@ -109,6 +110,24 @@ class NavigationTripServiceTest {
         assertThat(Duration.between(trip.getStartedAt(), trip.getEndedAt()).toMillis())
                 .isCloseTo(300_000L, within(1_000L));
         assertThat(trip.getUsedAR()).isTrue();
+    }
+
+    @Test
+    void finalReportStoresHowTheIndoorTransitionWasDecided() {
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.empty());
+        TripReportDTO r = report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 300_000L);
+        TransitionStats stats = TransitionStats.builder()
+                .trigger("auto-door").score(72).distanceM(9.5).accuracyM(5.0).approachMs(41_000L)
+                .switchToVpsMs(2_300L).prewarmed(true).cancellations(0).rejections(1).returnsToOutdoor(0).falseIndoor(0)
+                .build();
+        TripReportDTO withTransition = new TripReportDTO(r.tripId(), r.deviceId(), r.status(), r.roomId(), r.roomName(),
+                r.building(), r.startMode(), r.startDistanceM(), r.startAccuracyM(), r.endReason(), r.durationMs(),
+                r.buildingReachedMs(), r.localizedMs(), r.outdoorRouteM(), r.indoorRouteM(), r.modeSwitches(),
+                r.vpsFailures(), r.usedAR(), null, null, stats);
+
+        service.report(withTransition, IPHONE_UA);
+
+        assertThat(savedTrip().getTransition()).isEqualTo(stats);
     }
 
     @Test

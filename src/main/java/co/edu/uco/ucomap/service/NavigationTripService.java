@@ -204,6 +204,7 @@ public class NavigationTripService {
         trip.setModeSwitches(dto.modeSwitches());
         trip.setVpsFailures(dto.vpsFailures());
         trip.setUsedAR(dto.usedAR());
+        trip.setTransition(dto.transition());
     }
 
     // ── Métricas ──────────────────────────────────────────────
