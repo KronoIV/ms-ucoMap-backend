@@ -10,9 +10,12 @@ import co.edu.uco.ucomap.model.TripStatus;
 import co.edu.uco.ucomap.repository.NavigationTripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -58,7 +61,13 @@ public class NavigationTripService {
                     .lastSeenAt(now)
                     .build();
             apply(trip, dto, now);
-            repository.save(trip);
+            try {
+                repository.save(trip);
+            } catch (DuplicateKeyException e) {
+                // Inicio y cierre llegaron a la vez (p. ej. al despertar el servidor): el otro ya lo creó
+                report(dto, userAgent);
+                return;
+            }
             log.info("Recorrido {} — trip={} destino={}", dto.status(), dto.tripId(), dto.roomName());
             return;
         }
@@ -69,8 +78,10 @@ public class NavigationTripService {
         }
         boolean inProgress = trip.getStatus() == TripStatus.IN_PROGRESS;
         if (inProgress && dto.status() == TripStatus.IN_PROGRESS) {
-            trip.setLastSeenAt(now);
-            repository.save(trip);
+            // Solo la hora: guardar el documento leído podría pisar un cierre que llegó a la vez
+            mongoTemplate.updateFirst(
+                    Query.query(Criteria.where("tripId").is(dto.tripId()).and("status").is(TripStatus.IN_PROGRESS)),
+                    Update.update("lastSeenAt", now), NavigationTrip.class);
             return;
         }
         // Un cierre tardío (p. ej. volvió a la app y llegó) corrige el abandono automático
@@ -162,22 +173,33 @@ public class NavigationTripService {
     /** Cierra como abandonados los recorridos sin avisos recientes (la app se cerró sin poder avisar). */
     public void expireStaleTrips() {
         Instant cutoff = Instant.now().minus(STALE_AFTER);
-        List<NavigationTrip> stale = repository.findByStatus(TripStatus.IN_PROGRESS).stream()
+        repository.findByStatus(TripStatus.IN_PROGRESS).stream()
                 .filter(t -> lastSeen(t).isBefore(cutoff))
-                .toList();
-        if (stale.isEmpty()) return;
-        stale.forEach(t -> {
-            Instant last = lastSeen(t);
-            t.setStatus(TripStatus.ABANDONED);
-            t.setEndReason(TIMEOUT_REASON);
-            t.setEndedAt(last);
-            t.setDurationMs(Duration.between(t.getStartedAt(), last).toMillis());
-        });
-        repository.saveAll(stale);
+                .forEach(t -> {
+                    Instant last = lastSeen(t);
+                    // Condicionado a que siga igual: un cierre o un aviso que llegó mientras tanto gana
+                    mongoTemplate.updateFirst(
+                            Query.query(Criteria.where("_id").is(t.getId())
+                                    .and("status").is(TripStatus.IN_PROGRESS)
+                                    .and("lastSeenAt").is(t.getLastSeenAt())),
+                            new Update()
+                                    .set("status", TripStatus.ABANDONED)
+                                    .set("endReason", TIMEOUT_REASON)
+                                    .set("endedAt", last)
+                                    .set("durationMs", Duration.between(t.getStartedAt(), last).toMillis()),
+                            NavigationTrip.class);
+                });
     }
 
     private static Instant lastSeen(NavigationTrip trip) {
         return trip.getLastSeenAt() != null ? trip.getLastSeenAt() : trip.getStartedAt();
+    }
+
+    /** La app reenvía los cierres que no llegaron: el fin real es inicio + duración, no la hora del reenvío. */
+    private static Instant endedAt(NavigationTrip trip, TripReportDTO dto, Instant now) {
+        if (dto.durationMs() == null || trip.getStartedAt() == null) return now;
+        Instant byDuration = trip.getStartedAt().plusMillis(dto.durationMs());
+        return byDuration.isBefore(now) ? byDuration : now;
     }
 
     private void apply(NavigationTrip trip, TripReportDTO dto, Instant now) {
@@ -194,7 +216,7 @@ public class NavigationTripService {
         trip.setStatus(dto.status());
         if (dto.status() == TripStatus.IN_PROGRESS) return;
 
-        trip.setEndedAt(now);
+        trip.setEndedAt(endedAt(trip, dto, now));
         trip.setEndReason(dto.endReason() != null && !dto.endReason().isBlank() ? dto.endReason() : "closed");
         trip.setDurationMs(dto.durationMs());
         trip.setBuildingReachedMs(dto.buildingReachedMs());

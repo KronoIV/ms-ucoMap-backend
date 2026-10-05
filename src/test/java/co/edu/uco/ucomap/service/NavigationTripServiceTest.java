@@ -8,14 +8,17 @@ import co.edu.uco.ucomap.model.NavigationTrip;
 import co.edu.uco.ucomap.model.TransitionStats;
 import co.edu.uco.ucomap.model.TripStatus;
 import co.edu.uco.ucomap.repository.NavigationTripRepository;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.UpdateDefinition;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -29,9 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +64,12 @@ class NavigationTripServiceTest {
         ArgumentCaptor<NavigationTrip> captor = ArgumentCaptor.forClass(NavigationTrip.class);
         verify(repository).save(captor.capture());
         return captor.getValue();
+    }
+
+    private List<Document> updates(int count) {
+        ArgumentCaptor<UpdateDefinition> captor = ArgumentCaptor.forClass(UpdateDefinition.class);
+        verify(mongoTemplate, times(count)).updateFirst(any(Query.class), captor.capture(), eq(NavigationTrip.class));
+        return captor.getAllValues().stream().map(u -> (Document) u.getUpdateObject().get("$set")).toList();
     }
 
     // ── report ────────────────────────────────────────────────
@@ -139,10 +148,43 @@ class NavigationTripServiceTest {
 
         service.report(report(DEVICE, TripStatus.IN_PROGRESS, null, null), IPHONE_UA);
 
-        assertThat(trip.getLastSeenAt()).isAfter(started);
-        assertThat(trip.getRoomName()).isEqualTo("Original");
-        assertThat(trip.getStatus()).isEqualTo(TripStatus.IN_PROGRESS);
-        verify(repository).save(trip);
+        // Actualización atómica de un solo campo: no puede pisar un cierre concurrente
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        ArgumentCaptor<UpdateDefinition> update = ArgumentCaptor.forClass(UpdateDefinition.class);
+        verify(mongoTemplate).updateFirst(query.capture(), update.capture(), eq(NavigationTrip.class));
+        assertThat(query.getValue().getQueryObject()).containsEntry("tripId", TRIP_ID)
+                .containsEntry("status", TripStatus.IN_PROGRESS);
+        Document set = (Document) update.getValue().getUpdateObject().get("$set");
+        assertThat(set.keySet()).containsExactly("lastSeenAt");
+        assertThat((Instant) set.get("lastSeenAt")).isAfter(started);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void simultaneousStartAndCloseKeepTheClose() {
+        // El inicio se insertó justo antes: el cierre se aplica sobre ese documento
+        Instant started = Instant.now().minusSeconds(30);
+        NavigationTrip inserted = existing(TripStatus.IN_PROGRESS, null, started, started);
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.empty(), Optional.of(inserted));
+        when(repository.save(any())).thenThrow(new DuplicateKeyException("tripId")).thenAnswer(i -> i.getArgument(0));
+
+        service.report(report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 30_000L), IPHONE_UA);
+
+        assertThat(inserted.getStatus()).isEqualTo(TripStatus.ARRIVED);
+        assertThat(inserted.getEndReason()).isEqualTo("ar-arrival");
+        verify(repository).save(inserted);
+    }
+
+    @Test
+    void lateReportEndsAtStartPlusDuration() {
+        // Cierre reenviado horas después (no había señal): el fin no es la hora del reenvío
+        Instant started = Instant.now().minus(Duration.ofHours(3));
+        NavigationTrip trip = existing(TripStatus.ABANDONED, "timeout", started, started.plusSeconds(60));
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.of(trip));
+
+        service.report(report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 240_000L), IPHONE_UA);
+
+        assertThat(trip.getEndedAt()).isEqualTo(started.plusMillis(240_000L));
     }
 
     @Test
@@ -216,12 +258,28 @@ class NavigationTripServiceTest {
         List<NavigationTrip> result = service.findPage(NO_FILTER, 0, 25).content();
 
         assertThat(result).containsExactly(stale, alive);
-        assertThat(stale.getStatus()).isEqualTo(TripStatus.ABANDONED);
-        assertThat(stale.getEndReason()).isEqualTo("timeout");
-        assertThat(stale.getEndedAt()).isEqualTo(lastSeen);
-        assertThat(stale.getDurationMs()).isEqualTo(Duration.ofMinutes(15).toMillis());
-        assertThat(alive.getStatus()).isEqualTo(TripStatus.IN_PROGRESS);
-        verify(repository).saveAll(List.of(stale));
+        Document set = updates(1).get(0);
+        assertThat(set.get("status")).isEqualTo(TripStatus.ABANDONED);
+        assertThat(set.get("endReason")).isEqualTo("timeout");
+        assertThat(set.get("endedAt")).isEqualTo(lastSeen);
+        assertThat(set.get("durationMs")).isEqualTo(Duration.ofMinutes(15).toMillis());
+    }
+
+    @Test
+    void expiryOnlyAppliesIfTheTripDidNotChangeMeanwhile() {
+        Instant started = Instant.now().minus(Duration.ofMinutes(40));
+        Instant lastSeen = Instant.now().minus(Duration.ofMinutes(25));
+        when(repository.findByStatus(TripStatus.IN_PROGRESS))
+                .thenReturn(List.of(existing(TripStatus.IN_PROGRESS, null, started, lastSeen)));
+
+        service.summarize(NO_FILTER);
+
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(mongoTemplate).updateFirst(query.capture(), any(UpdateDefinition.class), eq(NavigationTrip.class));
+        assertThat(query.getValue().getQueryObject())
+                .containsEntry("_id", "db1")
+                .containsEntry("status", TripStatus.IN_PROGRESS)
+                .containsEntry("lastSeenAt", lastSeen);
     }
 
     @Test
@@ -232,9 +290,10 @@ class NavigationTripServiceTest {
 
         service.findPage(NO_FILTER, 0, 25);
 
-        assertThat(legacy.getStatus()).isEqualTo(TripStatus.ABANDONED);
-        assertThat(legacy.getEndedAt()).isEqualTo(started);
-        assertThat(legacy.getDurationMs()).isZero();
+        Document set = updates(1).get(0);
+        assertThat(set.get("status")).isEqualTo(TripStatus.ABANDONED);
+        assertThat(set.get("endedAt")).isEqualTo(started);
+        assertThat(set.get("durationMs")).isEqualTo(0L);
     }
 
     @Test
@@ -243,7 +302,7 @@ class NavigationTripServiceTest {
 
         service.summarize(NO_FILTER);
 
-        verify(repository, never()).saveAll(anyList());
+        verify(mongoTemplate, never()).updateFirst(any(Query.class), any(UpdateDefinition.class), eq(NavigationTrip.class));
     }
 
     // ── Paginación, resumen y exportación ─────────────────────
