@@ -41,9 +41,8 @@ public class Room {
 
     /**
      * ID del clip/state de animación en el modelo AR (Zappar).
-     * Corresponde a la clave en POI_CLIP_NAMES del frontend.
+     * Corresponde a la clave en POI_CLIP_NAMES del frontend. Opcional: el destino AR se ubica con arPosition.
      */
-    @NotBlank
     private String stateId;
 
     /** URL del modelo 3D (para uso futuro). */

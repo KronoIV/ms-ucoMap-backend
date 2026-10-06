@@ -32,9 +32,18 @@ public class GraphNode {
     /** Etiqueta visible (solo para BUILDING y ENTRANCE). */
     private String label;
 
-    /** Tipo del nodo: BUILDING, ENTRANCE, DOOR o WAYPOINT. */
+    /** Tipo del nodo: BUILDING, ENTRANCE, DOOR, WAYPOINT o POI. */
     @Indexed
     private NodeType nodeType;
+
+    /**
+     * Solo POI: clave de su clase ("CAFETERIA", "BANOS"…). Es libre a propósito: el catálogo con nombre e
+     * icono vive en la app y el panel (poi-catalog.ts), así una clase nueva no requiere cambiar el backend.
+     */
+    private String poiType;
+
+    /** Solo POI: edificio (buildingId) que lo contiene; la ruta llega a ese edificio. Vacío = al aire libre. */
+    private String buildingId;
 
     /** Si el nodo está activo en el sistema de navegación. */
     @Builder.Default

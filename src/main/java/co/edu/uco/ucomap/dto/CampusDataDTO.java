@@ -71,6 +71,8 @@ public class CampusDataDTO {
         private PixelDTO pixel;
         private String   label;
         private String   nodeType;
+        private String   poiType;
+        private String   buildingId;
     }
 
     @Data

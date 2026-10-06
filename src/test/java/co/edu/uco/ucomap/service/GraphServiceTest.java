@@ -3,6 +3,7 @@ package co.edu.uco.ucomap.service;
 import co.edu.uco.ucomap.model.GraphEdge;
 import co.edu.uco.ucomap.model.GraphNode;
 import co.edu.uco.ucomap.model.NodeType;
+import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.GraphEdgeRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ class GraphServiceTest {
 
     @Mock GraphNodeRepository nodeRepository;
     @Mock GraphEdgeRepository edgeRepository;
+    @Mock BuildingRepository buildingRepository;
     @Mock BuildingNodeSync buildingSync;
     @InjectMocks GraphService service;
 
@@ -112,5 +114,41 @@ class GraphServiceTest {
         assertThat(result.getLabel()).isEqualTo("Entrada");
         assertThat(result.getNodeType()).isEqualTo(NodeType.ENTRANCE);
         assertThat(result.isActive()).isFalse();
+    }
+
+    private static GraphNode poi(String type, String buildingId) {
+        return GraphNode.builder().nodeId("W1").nodeType(NodeType.POI).poiType(type).buildingId(buildingId).build();
+    }
+
+    @Test
+    void poiTypeIsNormalizedAndAnyFutureTypeIsAccepted() {
+        when(nodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.createNode(poi(" cafeteria ", "  ")).getPoiType()).isEqualTo("CAFETERIA");
+        GraphNode banos = service.createNode(poi("BANOS", null));
+        assertThat(banos.getPoiType()).isEqualTo("BANOS");
+        assertThat(banos.getBuildingId()).isNull();
+    }
+
+    @Test
+    void poiWithoutTypeOrWithUnknownBuildingIsRejected() {
+        when(buildingRepository.existsById("NOPE")).thenReturn(false);
+
+        assertStatus(() -> service.createNode(poi(null, null)), HttpStatus.BAD_REQUEST);
+        assertStatus(() -> service.createNode(poi("CAFETERIA", "NOPE")), HttpStatus.BAD_REQUEST);
+        verify(nodeRepository, never()).save(any());
+    }
+
+    @Test
+    void changingAPoiToAnotherTypeDropsItsPoiData() {
+        GraphNode stored = poi("CAFETERIA", "M");
+        when(nodeRepository.findById("W1")).thenReturn(Optional.of(stored));
+        when(nodeRepository.save(stored)).thenReturn(stored);
+        GraphNode changes = GraphNode.builder().nodeType(NodeType.WAYPOINT).poiType("CAFETERIA").buildingId("M").build();
+
+        GraphNode result = service.updateNode("W1", changes);
+
+        assertThat(result.getPoiType()).isNull();
+        assertThat(result.getBuildingId()).isNull();
     }
 }
