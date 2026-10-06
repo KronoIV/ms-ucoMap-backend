@@ -28,6 +28,7 @@ class GraphServiceTest {
 
     @Mock GraphNodeRepository nodeRepository;
     @Mock GraphEdgeRepository edgeRepository;
+    @Mock BuildingNodeSync buildingSync;
     @InjectMocks GraphService service;
 
     private static GraphNode node(String id) {

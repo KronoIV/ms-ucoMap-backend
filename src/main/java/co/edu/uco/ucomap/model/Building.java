@@ -43,8 +43,12 @@ public class Building {
     @NotBlank
     private String category;
 
-    /** Coordenadas GPS del edificio (centro aproximado). */
+    /** Coordenadas GPS del edificio (las del nodo BUILDING que lo ubica en el mapa). */
     private GpsPoint gps;
+
+    /** Nodo BUILDING del grafo que lo ubica; si falta, es el mismo buildingId. */
+    @Indexed
+    private String nodeId;
 
     @Builder.Default
     private boolean active = true;

@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -24,6 +25,7 @@ public class GraphService {
 
     private final GraphNodeRepository nodeRepository;
     private final GraphEdgeRepository edgeRepository;
+    private final BuildingNodeSync    buildingSync;
 
     // ── Nodes ─────────────────────────────────────────────────
 
@@ -54,18 +56,22 @@ public class GraphService {
                     ErrorCode.CONFLICT.getMessage());
         }
         GraphNode saved = nodeRepository.save(node);
+        buildingSync.nodeSaved(saved, true);
         log.info("Nodo creado — nodeId={} type={}", saved.getNodeId(), saved.getNodeType());
         return saved;
     }
 
     public GraphNode updateNode(String nodeId, GraphNode updated) {
         GraphNode existing = findNodeById(nodeId);
+        // Arrastrar el punto reenvía el nombre: solo un cambio real renombra el edificio
+        boolean labelChanged = !Objects.equals(existing.getLabel(), updated.getLabel());
         existing.setGps(updated.getGps());
         existing.setPixel(updated.getPixel());
         existing.setLabel(updated.getLabel());
         existing.setNodeType(updated.getNodeType());
         existing.setActive(updated.isActive());
         GraphNode saved = nodeRepository.save(existing);
+        buildingSync.nodeSaved(saved, labelChanged);
         log.info("Nodo actualizado — nodeId={}", nodeId);
         return saved;
     }
@@ -74,6 +80,7 @@ public class GraphService {
         GraphNode node = findNodeById(nodeId);
         node.setActive(false);
         nodeRepository.save(node);
+        buildingSync.nodeSaved(node, false);
         List<GraphEdge> edges = edgeRepository.findByNodeAOrNodeB(nodeId, nodeId);
         edges.forEach(e -> e.setActive(false));
         edgeRepository.saveAll(edges);

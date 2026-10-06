@@ -1,9 +1,12 @@
 package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.model.Building;
+import co.edu.uco.ucomap.model.GpsPoint;
 import co.edu.uco.ucomap.model.MapConfig;
+import co.edu.uco.ucomap.model.NodeType;
 import co.edu.uco.ucomap.model.PoiClip;
 import co.edu.uco.ucomap.repository.BuildingRepository;
+import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import co.edu.uco.ucomap.repository.MapConfigRepository;
 import co.edu.uco.ucomap.repository.PoiClipRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +18,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,6 +30,8 @@ public class BuildingService {
     private final BuildingRepository  buildingRepository;
     private final MapConfigRepository mapConfigRepository;
     private final PoiClipRepository   poiClipRepository;
+    private final GraphNodeRepository nodeRepository;
+    private final BuildingNodeSync    buildingSync;
 
     // ── Buildings ──────────────────────────────────────────────
 
@@ -59,22 +63,35 @@ public class BuildingService {
     public Building create(Building building) {
         String buildingId = requireText(building.getBuildingId(), "buildingId");
         String category = requireText(building.getCategory(), "category");
+        requireLocation(building.getGps());
 
-        if (buildingRepository.existsById(buildingId)) {
+        // Uno borrado desde el mapa (oculto) se puede volver a crear con el mismo ID
+        Building previous = buildingRepository.findById(buildingId).orElse(null);
+        if (previous != null && previous.isActive()) {
             log.warn("Edificio duplicado — buildingId={}", buildingId);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
-        if (buildingRepository.existsByCategoryIgnoreCase(category)) {
+        if (categoryTaken(category, buildingId)) {
             log.warn("Categoría de edificio duplicada — category={}", category);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
         }
+        // El ID también nombra su punto en el mapa: no puede ser el de otro punto que no sea edificio
+        nodeRepository.findById(buildingId)
+                .filter(n -> n.isActive() && n.getNodeType() != NodeType.BUILDING)
+                .ifPresent(n -> {
+                    log.warn("El ID del edificio ya es otro punto del mapa — nodeId={} type={}", buildingId, n.getNodeType());
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            ErrorCode.CONFLICT.getMessage());
+                });
 
         building.setBuildingId(buildingId);
         building.setCategory(category);
+        building.setNodeId(previous != null ? previous.getNodeId() : null);
         building.setActive(true);
         Building saved = buildingRepository.save(building);
+        buildingSync.buildingSaved(saved, true);
         log.info("Edificio creado — buildingId={} category={}", buildingId, category);
         return saved;
     }
@@ -83,18 +100,21 @@ public class BuildingService {
         Building existing = findById(buildingId);
 
         String nextCategory = requireText(updated.getCategory(), "category");
-        if (!Objects.equals(existing.getCategory(), nextCategory)
-                && buildingRepository.existsByCategoryIgnoreCase(nextCategory)) {
+        if (!nextCategory.equalsIgnoreCase(existing.getCategory()) && categoryTaken(nextCategory, buildingId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     ErrorCode.CONFLICT.getMessage());
+        }
+        if (updated.getGps() != null) {
+            requireLocation(updated.getGps());
+            existing.setGps(updated.getGps());
         }
 
         existing.setLabel(updated.getLabel());
         existing.setColor(updated.getColor());
         existing.setCategory(nextCategory);
-        existing.setGps(updated.getGps());
         existing.setActive(updated.isActive());
         Building saved = buildingRepository.save(existing);
+        buildingSync.buildingSaved(saved, false);
         log.info("Edificio actualizado — buildingId={}", buildingId);
         return saved;
     }
@@ -102,7 +122,22 @@ public class BuildingService {
     public void delete(String buildingId) {
         Building building = findById(buildingId);
         buildingRepository.delete(building);
+        buildingSync.buildingDeleted(building);
         log.info("Edificio eliminado — buildingId={}", buildingId);
+    }
+
+    private boolean categoryTaken(String category, String exceptBuildingId) {
+        return buildingRepository.findByCategoryIgnoreCase(category).stream()
+                .anyMatch(b -> !b.getBuildingId().equals(exceptBuildingId));
+    }
+
+    /** Sin coordenadas el edificio no tendría punto en el mapa (0,0 es el valor vacío del formulario). */
+    private void requireLocation(GpsPoint gps) {
+        if (gps == null || (gps.getLat() == 0 && gps.getLng() == 0)
+                || Math.abs(gps.getLat()) > 90 || Math.abs(gps.getLng()) > 180) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    ErrorCode.VALIDATION_ERROR.getMessage());
+        }
     }
 
     private String requireText(String value, String fieldName) {
