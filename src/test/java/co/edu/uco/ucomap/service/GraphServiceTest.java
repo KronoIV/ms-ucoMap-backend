@@ -124,7 +124,7 @@ class GraphServiceTest {
     void poiTypeIsNormalizedAndAnyFutureTypeIsAccepted() {
         when(nodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.createNode(poi(" cafeteria ", "  ")).getPoiType()).isEqualTo("CAFETERIA");
+        assertThat(service.createNode(poi(" auditorio ", "  ")).getPoiType()).isEqualTo("AUDITORIO");
         GraphNode banos = service.createNode(poi("BANOS", null));
         assertThat(banos.getPoiType()).isEqualTo("BANOS");
         assertThat(banos.getBuildingId()).isNull();
@@ -135,16 +135,16 @@ class GraphServiceTest {
         when(buildingRepository.existsById("NOPE")).thenReturn(false);
 
         assertStatus(() -> service.createNode(poi(null, null)), HttpStatus.BAD_REQUEST);
-        assertStatus(() -> service.createNode(poi("CAFETERIA", "NOPE")), HttpStatus.BAD_REQUEST);
+        assertStatus(() -> service.createNode(poi("AUDITORIO", "NOPE")), HttpStatus.BAD_REQUEST);
         verify(nodeRepository, never()).save(any());
     }
 
     @Test
     void changingAPoiToAnotherTypeDropsItsPoiData() {
-        GraphNode stored = poi("CAFETERIA", "M");
+        GraphNode stored = poi("AUDITORIO", "M");
         when(nodeRepository.findById("W1")).thenReturn(Optional.of(stored));
         when(nodeRepository.save(stored)).thenReturn(stored);
-        GraphNode changes = GraphNode.builder().nodeType(NodeType.WAYPOINT).poiType("CAFETERIA").buildingId("M").build();
+        GraphNode changes = GraphNode.builder().nodeType(NodeType.WAYPOINT).poiType("AUDITORIO").buildingId("M").build();
 
         GraphNode result = service.updateNode("W1", changes);
 
@@ -159,10 +159,10 @@ class GraphServiceTest {
 
         GraphNode door = GraphNode.builder().nodeId("D1").nodeType(NodeType.DOOR).floor(3).build();
         assertThat(service.createNode(door).getFloor()).isEqualTo(3);
-        GraphNode indoorPoi = poi("CAFETERIA", "M");
+        GraphNode indoorPoi = poi("AUDITORIO", "M");
         indoorPoi.setFloor(-1);
         assertThat(service.createNode(indoorPoi).getFloor()).isEqualTo(-1);
-        GraphNode outdoorPoi = poi("CAFETERIA", null);
+        GraphNode outdoorPoi = poi("AUDITORIO", null);
         outdoorPoi.setFloor(2);
         assertThat(service.createNode(outdoorPoi).getFloor()).isNull();
         GraphNode waypoint = GraphNode.builder().nodeId("W2").nodeType(NodeType.WAYPOINT).floor(2).build();

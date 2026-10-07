@@ -10,7 +10,7 @@ public enum NodeType {
     DOOR,
     /** Intersección o punto de paso interno (P1–P15…) */
     WAYPOINT,
-    /** Punto de interés (cafetería, baños…): destino de la app; su clase va en GraphNode.poiType */
+    /** Punto de interés (auditorio, baños…): destino de la app; su clase va en GraphNode.poiType */
     POI
 }
 

@@ -99,7 +99,7 @@ public class GraphService {
     }
 
     /**
-     * Solo los POI llevan clase y edificio; la clase se normaliza a una clave ("cafeteria" → "CAFETERIA").
+     * Solo los POI llevan clase y edificio; la clase se normaliza a una clave ("auditorio" → "AUDITORIO").
      * El piso solo aplica a puertas y a POI dentro de un edificio.
      */
     private void normalizePoi(GraphNode node) {

@@ -39,7 +39,7 @@ public class GraphNode {
     private NodeType nodeType;
 
     /**
-     * Solo POI: clave de su clase ("CAFETERIA", "BANOS"…). Es libre a propósito: el catálogo con nombre e
+     * Solo POI: clave de su clase ("AUDITORIO", "BANOS"…). Es libre a propósito: el catálogo con nombre e
      * icono vive en la app y el panel (poi-catalog.ts), así una clase nueva no requiere cambiar el backend.
      */
     private String poiType;

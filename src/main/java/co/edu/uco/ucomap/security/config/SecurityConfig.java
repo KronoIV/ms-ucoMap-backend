@@ -84,7 +84,6 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/buildings/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/rooms/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/graph/**").permitAll()
-                .requestMatchers(HttpMethod.GET,   "/api/cafeterias/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/navigation/navmesh").permitAll()
                 .requestMatchers(HttpMethod.POST,  "/api/multiset/token").permitAll()
