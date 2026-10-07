@@ -78,6 +78,7 @@ public class GraphService {
         existing.setNodeType(updated.getNodeType());
         existing.setPoiType(updated.getPoiType());
         existing.setBuildingId(updated.getBuildingId());
+        existing.setFloor(updated.getFloor());
         existing.setActive(updated.isActive());
         normalizePoi(existing);
         GraphNode saved = nodeRepository.save(existing);
@@ -97,11 +98,15 @@ public class GraphService {
         log.info("Nodo desactivado — nodeId={} aristasDesactivadas={}", nodeId, edges.size());
     }
 
-    /** Solo los POI llevan clase y edificio; la clase se normaliza a una clave ("cafeteria" → "CAFETERIA"). */
+    /**
+     * Solo los POI llevan clase y edificio; la clase se normaliza a una clave ("cafeteria" → "CAFETERIA").
+     * El piso solo aplica a puertas y a POI dentro de un edificio.
+     */
     private void normalizePoi(GraphNode node) {
         if (node.getNodeType() != NodeType.POI) {
             node.setPoiType(null);
             node.setBuildingId(null);
+            if (node.getNodeType() != NodeType.DOOR) node.setFloor(null);
             return;
         }
         String type = node.getPoiType() == null ? "" : node.getPoiType().trim().toUpperCase(Locale.ROOT);
@@ -113,6 +118,7 @@ public class GraphService {
         String building = node.getBuildingId() == null ? "" : node.getBuildingId().trim();
         if (building.isEmpty()) {
             node.setBuildingId(null);
+            node.setFloor(null);
             return;
         }
         if (!buildingRepository.existsById(building)) {

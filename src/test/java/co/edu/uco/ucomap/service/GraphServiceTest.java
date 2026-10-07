@@ -151,4 +151,21 @@ class GraphServiceTest {
         assertThat(result.getPoiType()).isNull();
         assertThat(result.getBuildingId()).isNull();
     }
+
+    @Test
+    void floorIsKeptOnlyForDoorsAndPoisInsideABuilding() {
+        when(nodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(buildingRepository.existsById("M")).thenReturn(true);
+
+        GraphNode door = GraphNode.builder().nodeId("D1").nodeType(NodeType.DOOR).floor(3).build();
+        assertThat(service.createNode(door).getFloor()).isEqualTo(3);
+        GraphNode indoorPoi = poi("CAFETERIA", "M");
+        indoorPoi.setFloor(-1);
+        assertThat(service.createNode(indoorPoi).getFloor()).isEqualTo(-1);
+        GraphNode outdoorPoi = poi("CAFETERIA", null);
+        outdoorPoi.setFloor(2);
+        assertThat(service.createNode(outdoorPoi).getFloor()).isNull();
+        GraphNode waypoint = GraphNode.builder().nodeId("W2").nodeType(NodeType.WAYPOINT).floor(2).build();
+        assertThat(service.createNode(waypoint).getFloor()).isNull();
+    }
 }

@@ -1,5 +1,7 @@
 package co.edu.uco.ucomap.model;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -50,6 +52,11 @@ public class Room {
 
     /** Destino AR en el mapa MultiSet. Si es null, la app usa el clip {@code stateId} de la escena. */
     private ArPoint arPosition;
+
+    /** Piso donde está (negativo = sótano); null = sin definir. */
+    @Min(-5)
+    @Max(60)
+    private Integer floor;
 
     @Builder.Default
     private boolean active = true;

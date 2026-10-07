@@ -67,6 +67,7 @@ public class CampusService {
                 .nodeType(node.getNodeType() != null ? node.getNodeType().name() : null)
                 .poiType(node.getPoiType())
                 .buildingId(node.getBuildingId())
+                .floor(node.getFloor())
                 .build();
     }
 

@@ -73,6 +73,7 @@ public class CampusDataDTO {
         private String   nodeType;
         private String   poiType;
         private String   buildingId;
+        private Integer  floor;
     }
 
     @Data

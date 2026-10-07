@@ -59,6 +59,7 @@ public class RoomService {
         existing.setStateId(updated.getStateId());
         existing.setModelUrl(updated.getModelUrl());
         existing.setArPosition(updated.getArPosition());
+        existing.setFloor(updated.getFloor());
         existing.setActive(updated.isActive());
         Room saved = roomRepository.save(existing);
         log.info("Salón actualizado — roomId={}", roomId);
@@ -85,10 +86,19 @@ public class RoomService {
         if (fields.containsKey("modelUrl")) room.setModelUrl((String) fields.get("modelUrl"));
         if (fields.containsKey("active"))   room.setActive((Boolean) fields.get("active"));
         if (fields.containsKey("arPosition")) room.setArPosition(toArPoint(fields.get("arPosition")));
+        if (fields.containsKey("floor"))    room.setFloor(toFloor(fields.get("floor")));
 
         Room saved = roomRepository.save(room);
         log.info("Salón modificado — roomId={} campos={}", roomId, fields.keySet());
         return saved;
+    }
+
+    private Integer toFloor(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n && n.doubleValue() == n.intValue() && n.intValue() >= -5 && n.intValue() <= 60) {
+            return n.intValue();
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR.getMessage());
     }
 
     private ArPoint toArPoint(Object value) {

@@ -1,5 +1,7 @@
 package co.edu.uco.ucomap.model;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -44,6 +46,11 @@ public class GraphNode {
 
     /** Solo POI: edificio (buildingId) que lo contiene; la ruta llega a ese edificio. Vacío = al aire libre. */
     private String buildingId;
+
+    /** Solo DOOR (piso por el que se sale) y POI dentro de un edificio. Negativo = sótano; null = sin definir. */
+    @Min(-5)
+    @Max(60)
+    private Integer floor;
 
     /** Si el nodo está activo en el sistema de navegación. */
     @Builder.Default
