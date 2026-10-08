@@ -1,9 +1,12 @@
 package co.edu.uco.ucomap.service;
 
+import co.edu.uco.ucomap.model.ArPoint;
 import co.edu.uco.ucomap.model.NavConnection;
 import co.edu.uco.ucomap.model.NavMeshData;
+import co.edu.uco.ucomap.model.NavPatch;
 import co.edu.uco.ucomap.repository.NavConnectionRepository;
 import co.edu.uco.ucomap.repository.NavMeshRepository;
+import co.edu.uco.ucomap.repository.NavPatchRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,6 +32,7 @@ class NavigationServiceTest {
 
     @Mock NavConnectionRepository connectionRepository;
     @Mock NavMeshRepository navMeshRepository;
+    @Mock NavPatchRepository patchRepository;
     @InjectMocks NavigationService service;
 
     private static byte[] navmesh(int size) {
@@ -92,5 +97,45 @@ class NavigationServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         verify(connectionRepository, never()).deleteById(any());
+    }
+
+    private static NavPatch patch(double... xz) {
+        List<ArPoint> points = new java.util.ArrayList<>();
+        for (int i = 0; i < xz.length; i += 2) points.add(new ArPoint(xz[i], 1.5, xz[i + 1]));
+        return NavPatch.builder().label("Hueco").points(points).build();
+    }
+
+    private void assertRejectedPatch(NavPatch p) {
+        assertThatThrownBy(() -> service.createPatch(p))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(patchRepository, never()).save(any());
+    }
+
+    @Test
+    void floorPatchIsStoredWithNewId() {
+        when(patchRepository.save(any(NavPatch.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NavPatch saved = service.createPatch(patch(0, 0, 2, 0, 2, 1, 0, 1));
+
+        assertThat(saved.getId()).isNotBlank();
+        assertThat(saved.getPoints()).hasSize(4);
+    }
+
+    @Test
+    void patchWithFewerThanThreePointsIsRejected() {
+        assertRejectedPatch(patch(0, 0, 1, 1));
+        assertRejectedPatch(NavPatch.builder().label("x").build());
+    }
+
+    @Test
+    void degenerateOrHugePatchIsRejected() {
+        assertRejectedPatch(patch(0, 0, 1, 0, 2, 0));
+        assertRejectedPatch(patch(0, 0, 80, 0, 80, 2, 0, 2));
+    }
+
+    @Test
+    void patchWithNonFiniteCoordinatesIsRejected() {
+        assertRejectedPatch(patch(0, 0, Double.NaN, 0, 1, 1));
     }
 }

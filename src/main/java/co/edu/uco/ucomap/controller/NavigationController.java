@@ -3,6 +3,7 @@ package co.edu.uco.ucomap.controller;
 import co.edu.uco.ucomap.common.dto.ApiSuccess;
 import co.edu.uco.ucomap.model.NavConnection;
 import co.edu.uco.ucomap.model.NavMeshData;
+import co.edu.uco.ucomap.model.NavPatch;
 import co.edu.uco.ucomap.service.NavigationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -52,6 +53,30 @@ public class NavigationController {
     @DeleteMapping("/connections/{id}")
     public ResponseEntity<ApiSuccess<Void>> deleteConnection(@PathVariable String id) {
         navigationService.deleteConnection(id);
+        return ResponseEntity.ok(ApiSuccess.of(null));
+    }
+
+    // ── Parches de suelo ───────────────────────────────────────
+
+    @GetMapping("/patches")
+    public ResponseEntity<ApiSuccess<List<NavPatch>>> getPatches() {
+        return ResponseEntity.ok(ApiSuccess.of(navigationService.findAllPatches()));
+    }
+
+    @PostMapping("/patches")
+    public ResponseEntity<ApiSuccess<NavPatch>> createPatch(@RequestBody NavPatch patch) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiSuccess.of(navigationService.createPatch(patch)));
+    }
+
+    @PutMapping("/patches/{id}")
+    public ResponseEntity<ApiSuccess<NavPatch>> updatePatch(@PathVariable String id, @RequestBody NavPatch patch) {
+        return ResponseEntity.ok(ApiSuccess.of(navigationService.updatePatch(id, patch)));
+    }
+
+    @DeleteMapping("/patches/{id}")
+    public ResponseEntity<ApiSuccess<Void>> deletePatch(@PathVariable String id) {
+        navigationService.deletePatch(id);
         return ResponseEntity.ok(ApiSuccess.of(null));
     }
 
