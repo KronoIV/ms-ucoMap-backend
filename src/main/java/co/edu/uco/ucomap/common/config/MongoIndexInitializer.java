@@ -1,6 +1,7 @@
 package co.edu.uco.ucomap.common.config;
 
 import co.edu.uco.ucomap.model.AppSession;
+import co.edu.uco.ucomap.model.CampusEvent;
 import co.edu.uco.ucomap.model.DeviceSession;
 import co.edu.uco.ucomap.model.GraphEdge;
 import co.edu.uco.ucomap.model.NavigationTrip;
@@ -50,6 +51,8 @@ public class MongoIndexInitializer implements ApplicationRunner {
 
         ensure(GraphEdge.class, new Index().on("nodeA", Sort.Direction.ASC));
         ensure(GraphEdge.class, new Index().on("nodeB", Sort.Direction.ASC));
+
+        ensure(CampusEvent.class, new Index().on("endsAt", Sort.Direction.ASC));
     }
 
     private void ensure(Class<?> entity, Index index) {

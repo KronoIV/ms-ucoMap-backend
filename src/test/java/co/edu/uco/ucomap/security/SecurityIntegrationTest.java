@@ -6,6 +6,7 @@ import co.edu.uco.ucomap.common.error.ErrorCode;
 import co.edu.uco.ucomap.common.web.ClientIpResolver;
 import co.edu.uco.ucomap.controller.AnalyticsController;
 import co.edu.uco.ucomap.controller.AuthController;
+import co.edu.uco.ucomap.controller.CampusEventController;
 import co.edu.uco.ucomap.controller.GraphController;
 import co.edu.uco.ucomap.controller.MultiSetController;
 import co.edu.uco.ucomap.controller.NavigationTripController;
@@ -22,6 +23,7 @@ import co.edu.uco.ucomap.security.jwt.JwtUtil;
 import co.edu.uco.ucomap.security.jwt.JwtUtilTest;
 import co.edu.uco.ucomap.security.service.UserDetailsServiceImpl;
 import co.edu.uco.ucomap.service.AnalyticsService;
+import co.edu.uco.ucomap.service.CampusEventService;
 import co.edu.uco.ucomap.service.GraphService;
 import co.edu.uco.ucomap.service.MultiSetService;
 import co.edu.uco.ucomap.service.NavigationTripService;
@@ -63,7 +65,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * No usa base de datos.
  */
 @WebMvcTest(controllers = {AuthController.class, GraphController.class,
-        NavigationTripController.class, UserController.class, MultiSetController.class, AnalyticsController.class})
+        NavigationTripController.class, UserController.class, MultiSetController.class, AnalyticsController.class,
+        CampusEventController.class})
 @Import({SecurityConfig.class, CorsConfig.class, JwtUtil.class, UserDetailsServiceImpl.class, ClientIpResolver.class})
 class SecurityIntegrationTest {
 
@@ -82,6 +85,7 @@ class SecurityIntegrationTest {
     @MockitoBean PasswordResetService passwordResetService;
     @MockitoBean MultiSetService multiSetService;
     @MockitoBean AnalyticsService analyticsService;
+    @MockitoBean CampusEventService eventService;
 
     @BeforeEach
     void setUp() {
@@ -168,6 +172,32 @@ class SecurityIntegrationTest {
         mvc.perform(post("/api/trips").contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(ErrorCode.VALIDATION_ERROR.getMessage()));
+    }
+
+    @Test
+    void appReadsCurrentEventsWithoutTokenButCannotManageThem() throws Exception {
+        when(eventService.visibleNow()).thenReturn(List.of());
+
+        mvc.perform(get("/api/events/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.succeeded").value(true))
+                .andExpect(result -> assertThat(result.getResponse().getHeader("Cache-Control")).contains("no-store"));
+
+        mvc.perform(get("/api/events")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/events").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        verify(eventService, never()).findAll();
+        verify(eventService, never()).create(any());
+    }
+
+    @Test
+    void eventWithoutPlaceOrScheduleIsRejected() throws Exception {
+        mvc.perform(post("/api/events").header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Feria\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.placeId").exists())
+                .andExpect(jsonPath("$.details.startsAt").exists());
+        verify(eventService, never()).create(any());
     }
 
     // ── Rutas de administración ──────────────────────────────

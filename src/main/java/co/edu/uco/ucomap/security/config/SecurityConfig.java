@@ -87,6 +87,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/navigation/navmesh").permitAll()
                 .requestMatchers(HttpMethod.POST,  "/api/multiset/token").permitAll()
+                .requestMatchers(HttpMethod.GET,   "/api/events/active").permitAll()
 
                 // ── Protected: ADMIN only ──────────────────────────────────
                 .requestMatchers("/api/sessions/**").hasRole("ADMIN")
@@ -95,6 +96,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers("/api/multiset/**").hasRole("ADMIN")
                 .requestMatchers("/api/navigation/**").hasRole("ADMIN")
+                .requestMatchers("/api/events", "/api/events/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH,  "/api/**").hasRole("ADMIN")
