@@ -1,10 +1,12 @@
 package co.edu.uco.ucomap.service;
 
+import co.edu.uco.ucomap.model.Building;
 import co.edu.uco.ucomap.model.CampusEvent;
 import co.edu.uco.ucomap.model.EventPlaceType;
 import co.edu.uco.ucomap.model.GraphNode;
 import co.edu.uco.ucomap.model.NodeType;
 import co.edu.uco.ucomap.model.Room;
+import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.CampusEventRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import co.edu.uco.ucomap.repository.RoomRepository;
@@ -36,6 +38,7 @@ class CampusEventServiceTest {
     @Mock CampusEventRepository eventRepository;
     @Mock RoomRepository roomRepository;
     @Mock GraphNodeRepository nodeRepository;
+    @Mock BuildingRepository buildingRepository;
     @InjectMocks CampusEventService service;
 
     private static CampusEvent event(EventPlaceType type, String placeId, Instant start, Instant end) {
@@ -91,6 +94,21 @@ class CampusEventServiceTest {
         when(nodeRepository.findById("P1")).thenReturn(Optional.of(
                 GraphNode.builder().nodeId("P1").nodeType(NodeType.WAYPOINT).active(true).build()));
         assertBadRequest(event(EventPlaceType.POI, "P1", START, START.plusSeconds(60)));
+
+        when(buildingRepository.findById("COLISEO")).thenReturn(Optional.of(
+                Building.builder().buildingId("COLISEO").active(false).build()));
+        assertBadRequest(event(EventPlaceType.BUILDING, "COLISEO", START, START.plusSeconds(60)));
+    }
+
+    @Test
+    void eventCanBeAtAWholeBuilding() {
+        when(buildingRepository.findById("COLISEO")).thenReturn(Optional.of(
+                Building.builder().buildingId("COLISEO").active(true).build()));
+        when(eventRepository.save(any(CampusEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CampusEvent saved = service.create(event(EventPlaceType.BUILDING, "COLISEO", START, START.plusSeconds(3600)));
+
+        assertThat(saved.getPlaceType()).isEqualTo(EventPlaceType.BUILDING);
     }
 
     @Test

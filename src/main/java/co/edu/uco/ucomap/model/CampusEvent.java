@@ -36,7 +36,7 @@ public class CampusEvent {
     @NotNull
     private EventPlaceType placeType;
 
-    /** roomId del lugar o nodeId del punto de interés. */
+    /** roomId del lugar, nodeId del punto de interés o buildingId del edificio. */
     @NotBlank
     @Size(max = 120)
     private String placeId;

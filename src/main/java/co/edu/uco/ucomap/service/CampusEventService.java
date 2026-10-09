@@ -1,9 +1,11 @@
 package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.common.error.ErrorCode;
+import co.edu.uco.ucomap.model.Building;
 import co.edu.uco.ucomap.model.CampusEvent;
 import co.edu.uco.ucomap.model.NodeType;
 import co.edu.uco.ucomap.model.Room;
+import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.CampusEventRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import co.edu.uco.ucomap.repository.RoomRepository;
@@ -29,6 +31,7 @@ public class CampusEventService {
     private final CampusEventRepository eventRepository;
     private final RoomRepository roomRepository;
     private final GraphNodeRepository nodeRepository;
+    private final BuildingRepository buildingRepository;
 
     public List<CampusEvent> findAll() {
         return eventRepository.findAllByOrderByStartsAtDesc();
@@ -103,6 +106,7 @@ public class CampusEventService {
             case POI -> nodeRepository.findById(placeId)
                     .filter(n -> n.isActive() && n.getNodeType() == NodeType.POI)
                     .isPresent();
+            case BUILDING -> buildingRepository.findById(placeId).filter(Building::isActive).isPresent();
         };
     }
 
