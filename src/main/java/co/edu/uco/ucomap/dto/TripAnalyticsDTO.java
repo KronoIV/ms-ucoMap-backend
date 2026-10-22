@@ -37,6 +37,9 @@ public record TripAnalyticsDTO(
             Double arUsageRate,
             Double medianLocalizedMs,
             Double avgVpsFailures,
+            /** Media de llamadas al VPS en los recorridos terminados que usaron la cámara. */
+            Double avgVpsCalls,
+            long totalVpsCalls,
             /** Recorridos con punto de partida (necesario para orígenes y mapa). */
             long withOrigin
     ) {}

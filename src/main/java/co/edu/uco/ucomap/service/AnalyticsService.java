@@ -180,6 +180,9 @@ public class AnalyticsService {
         List<NavigationTrip> withAR = finished.stream().filter(t -> Boolean.TRUE.equals(t.getUsedAR())).toList();
         List<Long> localized = finished.stream().map(NavigationTrip::getLocalizedMs).filter(Objects::nonNull).toList();
         List<Integer> vpsFailures = withAR.stream().map(t -> t.getVpsFailures() != null ? t.getVpsFailures() : 0).toList();
+        // Versiones anteriores de la app no envían vpsCalls: no cuentan como 0
+        List<Integer> vpsCalls = withAR.stream().map(NavigationTrip::getVpsCalls).filter(Objects::nonNull).toList();
+        long totalVpsCalls = trips.stream().map(NavigationTrip::getVpsCalls).filter(Objects::nonNull).mapToLong(Integer::longValue).sum();
         long withOrigin = trips.stream().filter(t -> t.getStartLat() != null && t.getStartLng() != null).count();
 
         TripAnalyticsDTO.Summary summary = new TripAnalyticsDTO.Summary(
@@ -190,7 +193,8 @@ public class AnalyticsService {
                 metric(tc.completionRate(), ptc.completionRate(), comparable),
                 median(arrivedDurations), percentile(arrivedDurations, 75), percentile(arrivedDurations, 90),
                 mean(arrivedDurations), median(abandonDurations), mean(routes),
-                ratio(withAR.size(), finished.size()), median(localized), mean(vpsFailures), withOrigin);
+                ratio(withAR.size(), finished.size()), median(localized), mean(vpsFailures), mean(vpsCalls), totalVpsCalls,
+                withOrigin);
 
         return new TripAnalyticsDTO(
                 new AnalyticsOverviewDTO.Period(r.from(), r.to(), prevFrom, r.from(), r.zone().getId(), r.platform()),

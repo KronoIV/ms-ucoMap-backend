@@ -86,7 +86,11 @@ public record TripReportDTO(
 
         // Cómo se decidió el paso a interior (solo en el reporte final)
         @Valid
-        TransitionStats transition
+        TransitionStats transition,
+
+        // Llamadas a la API de MultiSet (VPS) desde el inicio del recorrido; va en cada aviso
+        @PositiveOrZero @Max(100_000)
+        Integer vpsCalls
 ) {
     /** Reporte de versiones anteriores de la app (sin punto de partida). */
     public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
@@ -108,5 +112,16 @@ public record TripReportDTO(
         this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
                 endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
                 vpsFailures, usedAR, startLat, startLng, null);
+    }
+
+    /** Reporte de versiones anteriores de la app (sin llamadas al VPS). */
+    public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
+                         String building, String startMode, Double startDistanceM, Double startAccuracyM,
+                         String endReason, Long durationMs, Long buildingReachedMs, Long localizedMs,
+                         Double outdoorRouteM, Double indoorRouteM, Integer modeSwitches, Integer vpsFailures,
+                         Boolean usedAR, Double startLat, Double startLng, TransitionStats transition) {
+        this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
+                endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
+                vpsFailures, usedAR, startLat, startLng, transition, null);
     }
 }

@@ -12,6 +12,9 @@ public record TripSummaryDTO(
         Double medianArrivalMs,
         Double avgLocalizedMs,
         Double avgVpsFailures,
+        /** Media de llamadas al VPS en los recorridos terminados que usaron la cámara. */
+        Double avgVpsCalls,
+        long totalVpsCalls,
         List<DestinationStats> byDestination,
         List<ReasonCount> abandonReasons,
         List<String> buildings

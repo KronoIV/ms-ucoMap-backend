@@ -78,10 +78,12 @@ public class NavigationTripService {
         }
         boolean inProgress = trip.getStatus() == TripStatus.IN_PROGRESS;
         if (inProgress && dto.status() == TripStatus.IN_PROGRESS) {
-            // Solo la hora: guardar el documento leído podría pisar un cierre que llegó a la vez
+            // Solo la hora (y el contador): guardar el documento leído podría pisar un cierre que llegó a la vez
+            Update heartbeat = Update.update("lastSeenAt", now);
+            if (dto.vpsCalls() != null) heartbeat.set("vpsCalls", dto.vpsCalls());
             mongoTemplate.updateFirst(
                     Query.query(Criteria.where("tripId").is(dto.tripId()).and("status").is(TripStatus.IN_PROGRESS)),
-                    Update.update("lastSeenAt", now), NavigationTrip.class);
+                    heartbeat, NavigationTrip.class);
             return;
         }
         // Un cierre tardío (p. ej. volvió a la app y llegó) corrige el abandono automático
@@ -112,7 +114,7 @@ public class NavigationTripService {
     public TripSummaryDTO summarize(TripFilter filter) {
         expireStaleTrips();
         Query query = new Query(filter.toCriteria());
-        query.fields().include("status", "endReason", "durationMs", "localizedMs", "vpsFailures",
+        query.fields().include("status", "endReason", "durationMs", "localizedMs", "vpsFailures", "vpsCalls",
                 "usedAR", "building", "roomName");
 
         Stats all = new Stats(null, null);
@@ -134,7 +136,7 @@ public class NavigationTripService {
         return new TripSummaryDTO(
                 all.total, all.finished, all.arrived, all.total - all.finished,
                 mean(all.arrivalDurations), median(all.arrivalDurations),
-                mean(all.localized), mean(all.vpsFailures),
+                mean(all.localized), mean(all.vpsFailures), mean(all.vpsCalls), all.totalVpsCalls,
                 byDestination.values().stream()
                         .sorted(Comparator.comparingLong((Stats st) -> st.total).reversed())
                         .map(st -> new TripSummaryDTO.DestinationStats(st.building, st.roomName, st.total,
@@ -154,7 +156,7 @@ public class NavigationTripService {
         StringBuilder csv = new StringBuilder(
                 "Inicio,Fin,Destino,Edificio,Resultado,Motivo,Duración (s),Inicio en,Dist. inicial (m),"
                         + "Precisión GPS (m),Ruta ext. (m),Ruta int. (m),Llegó al edificio (s),Ubicación VPS (s),"
-                        + "Fallos VPS,Cambios modo,Usó AR,Plataforma,Dispositivo\n");
+                        + "Fallos VPS,Llamadas VPS,Cambios modo,Usó AR,Plataforma,Dispositivo\n");
         try (Stream<NavigationTrip> trips = mongoTemplate.stream(query, NavigationTrip.class)) {
             trips.forEach(t -> csv.append(String.join(",",
                     cell(date(t.getStartedAt())), cell(date(t.getEndedAt())),
@@ -163,7 +165,7 @@ public class NavigationTripService {
                     number(t.getStartDistanceM()), number(t.getStartAccuracyM()),
                     number(t.getOutdoorRouteM()), number(t.getIndoorRouteM()),
                     seconds(t.getBuildingReachedMs()), seconds(t.getLocalizedMs()),
-                    number(t.getVpsFailures()), number(t.getModeSwitches()),
+                    number(t.getVpsFailures()), number(t.getVpsCalls()), number(t.getModeSwitches()),
                     t.getUsedAR() == null ? "" : (t.getUsedAR() ? "sí" : "no"),
                     cell(t.getPlatform()), cell(t.getDeviceId()))).append('\n'));
         }
@@ -214,6 +216,7 @@ public class NavigationTripService {
             trip.setStartLng(round4(dto.startLng()));
         }
         trip.setStatus(dto.status());
+        if (dto.vpsCalls() != null) trip.setVpsCalls(dto.vpsCalls());
         if (dto.status() == TripStatus.IN_PROGRESS) return;
 
         trip.setEndedAt(endedAt(trip, dto, now));
@@ -245,6 +248,8 @@ public class NavigationTripService {
         final List<Long> arrivalDurations = new ArrayList<>();
         final List<Long> localized = new ArrayList<>();
         final List<Long> vpsFailures = new ArrayList<>();
+        final List<Long> vpsCalls = new ArrayList<>();
+        long totalVpsCalls;
 
         Stats(String building, String roomName) {
             this.building = building;
@@ -253,11 +258,15 @@ public class NavigationTripService {
 
         void add(NavigationTrip t) {
             total++;
+            // También los recorridos en curso ya gastaron llamadas
+            if (t.getVpsCalls() != null) totalVpsCalls += t.getVpsCalls();
             if (t.getStatus() == TripStatus.IN_PROGRESS) return;
             finished++;
             if (t.getLocalizedMs() != null) localized.add(t.getLocalizedMs());
             if (Boolean.TRUE.equals(t.getUsedAR())) {
                 vpsFailures.add(t.getVpsFailures() != null ? t.getVpsFailures().longValue() : 0L);
+                // Versiones anteriores de la app no lo envían: no cuentan como 0
+                if (t.getVpsCalls() != null) vpsCalls.add(t.getVpsCalls().longValue());
             }
             if (t.getStatus() == TripStatus.ARRIVED) {
                 arrived++;

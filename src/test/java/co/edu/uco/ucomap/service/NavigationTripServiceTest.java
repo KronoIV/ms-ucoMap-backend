@@ -160,6 +160,40 @@ class NavigationTripServiceTest {
         verify(repository, never()).save(any());
     }
 
+    private static TripReportDTO withVpsCalls(TripReportDTO r, int vpsCalls) {
+        return new TripReportDTO(r.tripId(), r.deviceId(), r.status(), r.roomId(), r.roomName(),
+                r.building(), r.startMode(), r.startDistanceM(), r.startAccuracyM(), r.endReason(), r.durationMs(),
+                r.buildingReachedMs(), r.localizedMs(), r.outdoorRouteM(), r.indoorRouteM(), r.modeSwitches(),
+                r.vpsFailures(), r.usedAR(), null, null, null, vpsCalls);
+    }
+
+    @Test
+    void heartbeatKeepsTheVpsCallCountUpToDate() {
+        // Si la app se cierra sin avisar, el abandono por timeout conserva las llamadas del último aviso
+        Instant started = Instant.now().minusSeconds(120);
+        when(repository.findByTripId(TRIP_ID))
+                .thenReturn(Optional.of(existing(TripStatus.IN_PROGRESS, null, started, started)));
+
+        service.report(withVpsCalls(report(DEVICE, TripStatus.IN_PROGRESS, null, null), 14), IPHONE_UA);
+
+        Document set = updates(1).get(0);
+        assertThat(set.keySet()).containsExactlyInAnyOrder("lastSeenAt", "vpsCalls");
+        assertThat(set.get("vpsCalls")).isEqualTo(14);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void finalReportStoresVpsCalls() {
+        Instant started = Instant.now().minusSeconds(300);
+        NavigationTrip trip = existing(TripStatus.IN_PROGRESS, null, started, started);
+        trip.setVpsCalls(14);
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.of(trip));
+
+        service.report(withVpsCalls(report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 300_000L), 31), IPHONE_UA);
+
+        assertThat(savedTrip().getVpsCalls()).isEqualTo(31);
+    }
+
     @Test
     void simultaneousStartAndCloseKeepTheClose() {
         // El inicio se insertó justo antes: el cierre se aplica sobre ese documento
@@ -365,11 +399,31 @@ class NavigationTripServiceTest {
         assertThat(s.medianArrivalMs()).isEqualTo(120_000.0);
         assertThat(s.avgLocalizedMs()).isEqualTo(6_000.0);
         assertThat(s.avgVpsFailures()).isEqualTo(2.0);
+        assertThat(s.avgVpsCalls()).isNull();
+        assertThat(s.totalVpsCalls()).isZero();
         assertThat(s.abandonReasons()).extracting(TripSummaryDTO.ReasonCount::reason)
                 .containsExactlyInAnyOrder("timeout", "closed");
         assertThat(s.byDestination()).hasSize(2);
         assertThat(s.byDestination().get(0).total()).isEqualTo(3);
         assertThat(s.buildings()).containsExactly("CO", "EDC");
+    }
+
+    @Test
+    void summaryAveragesVpsCallsOfTripsWithCameraAndAddsAllOfThem() {
+        NavigationTrip a = finished("CO 101", TripStatus.ARRIVED, "ar-arrival", 60_000L, 5_000L, true, 0);
+        a.setVpsCalls(10);
+        NavigationTrip b = finished("CO 101", TripStatus.ABANDONED, "closed", 90_000L, null, true, 2);
+        b.setVpsCalls(30);
+        // Versión anterior de la app: sin dato, no baja la media
+        NavigationTrip legacy = finished("CO 101", TripStatus.ARRIVED, "ar-arrival", 60_000L, 5_000L, true, 0);
+        NavigationTrip running = finished("CO 101", TripStatus.IN_PROGRESS, null, null, null, true, null);
+        running.setVpsCalls(5);
+        when(mongoTemplate.find(any(Query.class), eq(NavigationTrip.class))).thenReturn(List.of(a, b, legacy, running));
+
+        TripSummaryDTO s = service.summarize(NO_FILTER);
+
+        assertThat(s.avgVpsCalls()).isEqualTo(20.0);
+        assertThat(s.totalVpsCalls()).isEqualTo(45L);
     }
 
     @Test
