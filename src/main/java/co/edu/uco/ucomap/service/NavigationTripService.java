@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort;
+import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -25,6 +27,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -44,8 +47,14 @@ public class NavigationTripService {
     private static final Duration STALE_AFTER = Duration.ofMinutes(10);
     private static final String TIMEOUT_REASON = "timeout";
 
+    /** Ruta pública: la agregación se recalcula como mucho una vez por este intervalo. */
+    private static final Duration POPULAR_TTL = Duration.ofMinutes(10);
+
     private final NavigationTripRepository repository;
     private final MongoTemplate mongoTemplate;
+
+    private volatile Map<String, Long> popularCache;
+    private volatile Instant popularAt = Instant.EPOCH;
 
     public void report(TripReportDTO dto, String userAgent) {
         Instant now = Instant.now();
@@ -147,6 +156,24 @@ public class NavigationTripService {
                         .map(e -> new TripSummaryDTO.ReasonCount(e.getKey(), e.getValue()))
                         .toList(),
                 buildings);
+    }
+
+    /** Recorridos por edificio, del más buscado al menos (solo conteos: nada identifica a un usuario). */
+    public Map<String, Long> popularBuildings() {
+        Map<String, Long> cached = popularCache;
+        if (cached != null && popularAt.plus(POPULAR_TTL).isAfter(Instant.now())) return cached;
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("building").nin(null, "")),
+                Aggregation.group("building").count().as("trips"),
+                Aggregation.sort(Sort.Direction.DESC, "trips"));
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (Document row : mongoTemplate.aggregate(aggregation, NavigationTrip.class, Document.class)) {
+            counts.put(row.getString("_id"), ((Number) row.get("trips")).longValue());
+        }
+        popularCache = Collections.unmodifiableMap(counts);
+        popularAt = Instant.now();
+        return popularCache;
     }
 
     /** CSV (separado por comas, UTF-8) con todos los recorridos del rango, del más reciente al más antiguo. */

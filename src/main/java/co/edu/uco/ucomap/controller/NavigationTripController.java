@@ -10,6 +10,7 @@ import co.edu.uco.ucomap.service.NavigationTripService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,12 +18,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 
 /**
  * Recorridos de navegación (métricas de evaluación: tiempo de llegada y tasa de éxito).
  *
  * POST /api/trips          — público: la app reporta inicio y fin del recorrido
+ * GET  /api/trips/popular  — público: recorridos por edificio (orden de «Lugares» en la app)
  * GET  /api/trips          — ADMIN: página de recorridos (más recientes primero)
  * GET  /api/trips/summary  — ADMIN: métricas del rango filtrado
  * GET  /api/trips/export   — ADMIN: CSV con todos los recorridos del rango
@@ -39,6 +43,12 @@ public class NavigationTripController {
                                                    HttpServletRequest request) {
         tripService.report(body, request.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiSuccess.of(null));
+    }
+
+    @GetMapping("/popular")
+    public ResponseEntity<ApiSuccess<Map<String, Long>>> popular() {
+        return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(10)))
+                .body(ApiSuccess.of(tripService.popularBuildings()));
     }
 
     @GetMapping
