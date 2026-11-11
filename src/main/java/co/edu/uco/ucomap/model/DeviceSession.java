@@ -87,4 +87,7 @@ public class DeviceSession {
 
     /** Último estado de permisos reportado. */
     private PermissionSnapshot permissions;
+
+    /** Último veredicto de la guía con cámara (AR) para este teléfono. */
+    private ArCapabilitySnapshot arCapability;
 }

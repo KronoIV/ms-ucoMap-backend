@@ -4,6 +4,7 @@ import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.dto.PingRequestDTO;
 import co.edu.uco.ucomap.dto.StatsDTO;
 import co.edu.uco.ucomap.model.AppSession;
+import co.edu.uco.ucomap.model.ArCapabilitySnapshot;
 import co.edu.uco.ucomap.model.DeviceSession;
 import co.edu.uco.ucomap.model.PermissionSnapshot;
 import co.edu.uco.ucomap.repository.AppSessionRepository;
@@ -45,8 +46,22 @@ public class DeviceSessionService {
     private static final int MAX_FEATURE_COUNT = 10_000;
     private static final Set<String> ACCESS_STATES =
             Set.of("granted", "prompt", "denied", "blocked", "unavailable", "error");
+    // Sin guía con cámara en el teléfono la app no consulta la cámara
+    private static final Set<String> CAMERA_STATES =
+            Set.of("granted", "prompt", "denied", "blocked", "unavailable", "error", "not-required");
     private static final Set<String> MOTION_STATES =
             Set.of("granted", "denied", "not-required", "unknown");
+    private static final Set<String> AR_VERDICTS = Set.of("compatible", "limited", "unsupported", "disabled");
+    private static final Set<String> AR_TRACKERS = Set.of("webxr", "webcam");
+    private static final Set<String> AR_PROFILES = Set.of("full", "lite");
+    private static final Set<String> AR_SOURCES = Set.of("evaluated", "cached", "forced", "runtime");
+    private static final Set<String> GPU_CLASSES = Set.of("A", "B", "C", "D", "E", "apple", "unknown");
+    private static final Pattern AR_CRITERIA = Pattern.compile("^[0-9A-Za-z._-]{1,20}$");
+    private static final Pattern AR_REASON = Pattern.compile("^[A-Za-z0-9:<>=+._/-]{1,48}$");
+    private static final int MAX_AR_REASONS = 8;
+    private static final int MAX_GPU_LABEL = 80;
+    private static final int MAX_MODEL = 64;
+    private static final int MAX_OS = 32;
 
     private final DeviceSessionRepository repository;
     private final AppSessionRepository     appSessionRepository;
@@ -66,7 +81,8 @@ public class DeviceSessionService {
                           ? body.language() : headerLang;
         String platform = detectPlatform(userAgent);
         PermissionSnapshot permissions = sanitizePermissions(body);
-        VisitUpdate visit = trackVisit(deviceId, body, platform, userAgent, lang, permissions);
+        ArCapabilitySnapshot arCapability = sanitizeArCapability(body);
+        VisitUpdate visit = trackVisit(deviceId, body, platform, userAgent, lang, permissions, arCapability);
 
         Optional<DeviceSession> existing = repository.findByDeviceId(deviceId);
 
@@ -79,14 +95,15 @@ public class DeviceSessionService {
             session.setPlatform(platform);
             if (lang != null) session.setLanguage(lang);
             if (body != null) {
-                if (body.deviceModel()      != null) session.setDeviceModel(body.deviceModel());
-                if (body.osVersion()        != null) session.setOsVersion(body.osVersion());
+                if (body.deviceModel()      != null) session.setDeviceModel(truncate(body.deviceModel(), MAX_MODEL));
+                if (body.osVersion()        != null) session.setOsVersion(truncate(body.osVersion(), MAX_OS));
                 if (body.appVersion()       != null) session.setAppVersion(body.appVersion());
                 if (body.timezone()         != null) session.setTimezone(body.timezone());
                 if (body.screenResolution() != null) session.setScreenResolution(body.screenResolution());
                 if (body.networkType()      != null) session.setNetworkType(body.networkType());
             }
             if (permissions != null) session.setPermissions(permissions);
+            if (arCapability != null) session.setArCapability(arCapability);
             if (visit.created()) session.setVisitCount(session.getVisitCount() + 1);
             session.setTotalActiveMs(session.getTotalActiveMs() + visit.activeDeltaMs());
             log.debug("Ping actualizado — deviceId={} platform={} pings={}",
@@ -102,8 +119,8 @@ public class DeviceSessionService {
                 .userAgent(userAgent)
                 .ipAddress(ip)
                 .language(lang)
-                .deviceModel(     body != null ? body.deviceModel()      : null)
-                .osVersion(       body != null ? body.osVersion()        : null)
+                .deviceModel(     body != null ? truncate(body.deviceModel(), MAX_MODEL) : null)
+                .osVersion(       body != null ? truncate(body.osVersion(), MAX_OS) : null)
                 .appVersion(      body != null ? body.appVersion()       : null)
                 .timezone(        body != null ? body.timezone()         : null)
                 .screenResolution(body != null ? body.screenResolution() : null)
@@ -114,6 +131,7 @@ public class DeviceSessionService {
                 .visitCount(visit.created() ? 1 : 0)
                 .totalActiveMs(visit.activeDeltaMs())
                 .permissions(permissions)
+                .arCapability(arCapability)
                 .build();
 
         log.info("Nuevo dispositivo — deviceId={} platform={} ip={}", deviceId, platform, ip);
@@ -129,14 +147,14 @@ public class DeviceSessionService {
     }
 
     private VisitUpdate trackVisit(String deviceId, PingRequestDTO body, String platform, String userAgent,
-                                   String lang, PermissionSnapshot permissions) {
+                                   String lang, PermissionSnapshot permissions, ArCapabilitySnapshot arCapability) {
         if (body == null || body.sessionId() == null || !SESSION_ID.matcher(body.sessionId()).matches()) {
             return VisitUpdate.NONE;
         }
         // Dos pings simultáneos de una visita nueva: el segundo choca con el índice único y se reintenta como actualización
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                return updateVisit(deviceId, body, platform, userAgent, lang, permissions);
+                return updateVisit(deviceId, body, platform, userAgent, lang, permissions, arCapability);
             } catch (DuplicateKeyException e) {
                 log.debug("Visita {} creada en paralelo, reintentando", body.sessionId());
             }
@@ -145,7 +163,7 @@ public class DeviceSessionService {
     }
 
     private VisitUpdate updateVisit(String deviceId, PingRequestDTO body, String platform, String userAgent,
-                                    String lang, PermissionSnapshot permissions) {
+                                    String lang, PermissionSnapshot permissions, ArCapabilitySnapshot arCapability) {
         Instant now = Instant.now();
         Optional<AppSession> found = appSessionRepository.findBySessionId(body.sessionId());
         AppSession visit;
@@ -176,6 +194,7 @@ public class DeviceSessionService {
         if (body.screenResolution() != null) visit.setScreenResolution(truncate(body.screenResolution(), 16));
         if (body.networkType() != null)      visit.setNetworkType(truncate(body.networkType(), 16));
         if (permissions != null)             visit.setPermissions(permissions);
+        if (arCapability != null)            visit.setArCapability(arCapability);
         mergeFeatures(visit.getFeatures(), body.features());
         appSessionRepository.save(visit);
         return new VisitUpdate(created, visit.getActiveMs() - before);
@@ -208,11 +227,40 @@ public class DeviceSessionService {
         if (body == null || body.permissions() == null) return null;
         PingRequestDTO.Permissions p = body.permissions();
         // Set.of(...).contains(null) lanza NullPointerException
-        String camera   = p.camera() != null && ACCESS_STATES.contains(p.camera()) ? p.camera() : null;
+        String camera   = p.camera() != null && CAMERA_STATES.contains(p.camera()) ? p.camera() : null;
         String location = p.location() != null && ACCESS_STATES.contains(p.location()) ? p.location() : null;
         String motion   = p.motion() != null && MOTION_STATES.contains(p.motion()) ? p.motion() : null;
         if (camera == null && location == null && motion == null) return null;
         return new PermissionSnapshot(camera, location, motion);
+    }
+
+    /** Lo envía la app pública: solo valores conocidos, textos acotados y números en rango; sin veredicto válido, nada. */
+    static ArCapabilitySnapshot sanitizeArCapability(PingRequestDTO body) {
+        if (body == null || body.arCapability() == null) return null;
+        PingRequestDTO.ArCapability a = body.arCapability();
+        if (a.verdict() == null || !AR_VERDICTS.contains(a.verdict())) return null;
+        List<String> reasons = a.reasons() == null ? List.of() : a.reasons().stream()
+                .filter(r -> r != null && AR_REASON.matcher(r).matches())
+                .limit(MAX_AR_REASONS)
+                .toList();
+        return ArCapabilitySnapshot.builder()
+                .verdict(a.verdict())
+                .tracker(oneOf(a.tracker(), AR_TRACKERS))
+                .profile(oneOf(a.profile(), AR_PROFILES))
+                .criteria(a.criteria() != null && AR_CRITERIA.matcher(a.criteria()).matches() ? a.criteria() : null)
+                .source(oneOf(a.source(), AR_SOURCES))
+                .reasons(reasons)
+                .gpu(a.gpu() == null ? null : truncate(a.gpu().replaceAll("\\p{Cntrl}", ""), MAX_GPU_LABEL))
+                .gpuClass(oneOf(a.gpuClass(), GPU_CLASSES))
+                .memoryGb(a.memoryGb() != null && a.memoryGb() > 0 && a.memoryGb() <= 64 ? a.memoryGb() : null)
+                .cores(a.cores() != null && a.cores() > 0 && a.cores() <= 128 ? a.cores() : null)
+                .benchFrameMs(a.benchFrameMs() != null && a.benchFrameMs() >= 0 && a.benchFrameMs() <= 60_000 ? a.benchFrameMs() : null)
+                .benchGpuMs(a.benchGpuMs() != null && a.benchGpuMs() >= 0 && a.benchGpuMs() <= 60_000 ? a.benchGpuMs() : null)
+                .build();
+    }
+
+    private static String oneOf(String value, Set<String> allowed) {
+        return value != null && allowed.contains(value) ? value : null;
     }
 
     private static String truncate(String value, int max) {

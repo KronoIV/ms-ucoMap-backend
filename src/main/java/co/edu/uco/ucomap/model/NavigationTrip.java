@@ -78,4 +78,9 @@ public class NavigationTrip {
 
     /** Cómo se decidió el paso exterior → interior. */
     private TransitionStats transition;
+
+    /** Veredicto de la guía con cámara en el teléfono: compatible, limited, unsupported o disabled. */
+    private String arCapability;
+    /** Rendimiento de la sesión AR (solo recorridos que la usaron). */
+    private ArPerfStats arPerf;
 }

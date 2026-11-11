@@ -1,5 +1,6 @@
 package co.edu.uco.ucomap.dto;
 
+import co.edu.uco.ucomap.model.ArPerfStats;
 import co.edu.uco.ucomap.model.TransitionStats;
 import co.edu.uco.ucomap.model.TripStatus;
 import jakarta.validation.Valid;
@@ -90,7 +91,15 @@ public record TripReportDTO(
 
         // Llamadas a la API de MultiSet (VPS) desde el inicio del recorrido; va en cada aviso
         @PositiveOrZero @Max(100_000)
-        Integer vpsCalls
+        Integer vpsCalls,
+
+        // Veredicto de la guía con cámara en el teléfono; va en cada aviso
+        @Pattern(regexp = "^(compatible|limited|unsupported|disabled)$")
+        String arCapability,
+
+        // Rendimiento de la sesión AR (solo en el reporte final de recorridos con AR)
+        @Valid
+        ArPerfStats arPerf
 ) {
     /** Reporte de versiones anteriores de la app (sin punto de partida). */
     public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
@@ -123,5 +132,16 @@ public record TripReportDTO(
         this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
                 endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
                 vpsFailures, usedAR, startLat, startLng, transition, null);
+    }
+
+    /** Reporte de versiones anteriores de la app (sin datos de la guía con cámara). */
+    public TripReportDTO(String tripId, String deviceId, TripStatus status, String roomId, String roomName,
+                         String building, String startMode, Double startDistanceM, Double startAccuracyM,
+                         String endReason, Long durationMs, Long buildingReachedMs, Long localizedMs,
+                         Double outdoorRouteM, Double indoorRouteM, Integer modeSwitches, Integer vpsFailures,
+                         Boolean usedAR, Double startLat, Double startLng, TransitionStats transition, Integer vpsCalls) {
+        this(tripId, deviceId, status, roomId, roomName, building, startMode, startDistanceM, startAccuracyM,
+                endReason, durationMs, buildingReachedMs, localizedMs, outdoorRouteM, indoorRouteM, modeSwitches,
+                vpsFailures, usedAR, startLat, startLng, transition, vpsCalls, null, null);
     }
 }

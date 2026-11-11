@@ -4,6 +4,7 @@ import co.edu.uco.ucomap.common.dto.PageResponse;
 import co.edu.uco.ucomap.dto.TripFilter;
 import co.edu.uco.ucomap.dto.TripReportDTO;
 import co.edu.uco.ucomap.dto.TripSummaryDTO;
+import co.edu.uco.ucomap.model.ArPerfStats;
 import co.edu.uco.ucomap.model.NavigationTrip;
 import co.edu.uco.ucomap.model.TransitionStats;
 import co.edu.uco.ucomap.model.TripStatus;
@@ -192,6 +193,32 @@ class NavigationTripServiceTest {
         service.report(withVpsCalls(report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 300_000L), 31), IPHONE_UA);
 
         assertThat(savedTrip().getVpsCalls()).isEqualTo(31);
+    }
+
+    private static TripReportDTO withAr(TripReportDTO r, String verdict, ArPerfStats perf) {
+        return new TripReportDTO(r.tripId(), r.deviceId(), r.status(), r.roomId(), r.roomName(),
+                r.building(), r.startMode(), r.startDistanceM(), r.startAccuracyM(), r.endReason(), r.durationMs(),
+                r.buildingReachedMs(), r.localizedMs(), r.outdoorRouteM(), r.indoorRouteM(), r.modeSwitches(),
+                r.vpsFailures(), r.usedAR(), null, null, null, 12, verdict, perf);
+    }
+
+    @Test
+    void tripsKeepThePhoneArVerdictAndTheArSessionPerformance() {
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.empty());
+        service.report(withAr(report(DEVICE, TripStatus.IN_PROGRESS, null, null), "limited", null), IPHONE_UA);
+        NavigationTrip started = savedTrip();
+        assertThat(started.getArCapability()).isEqualTo("limited");
+        assertThat(started.getArPerf()).isNull();
+
+        when(repository.findByTripId(TRIP_ID)).thenReturn(Optional.of(started));
+        ArPerfStats perf = ArPerfStats.builder().fpsMedian(28.4).fpsP10(21.0).captureMsMedian(140.0).captures(9)
+                .seconds(95).guard(null).build();
+        service.report(withAr(report(DEVICE, TripStatus.ARRIVED, "ar-arrival", 300_000L), "limited", perf), IPHONE_UA);
+
+        ArgumentCaptor<NavigationTrip> captor = ArgumentCaptor.forClass(NavigationTrip.class);
+        verify(repository, times(2)).save(captor.capture());
+        assertThat(captor.getValue().getArPerf()).isEqualTo(perf);
+        assertThat(captor.getValue().getArCapability()).isEqualTo("limited");
     }
 
     @Test

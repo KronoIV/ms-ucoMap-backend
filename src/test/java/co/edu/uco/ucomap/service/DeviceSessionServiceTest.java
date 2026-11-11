@@ -222,6 +222,68 @@ class DeviceSessionServiceTest {
         assertThat(p.getMotion()).isNull();
         assertThat(DeviceSessionService.sanitizePermissions(
                 visitPing(SESSION, 0L, null, new PingRequestDTO.Permissions("x", "y", "z")))).isNull();
+        // Teléfonos sin guía con cámara: la app ni consulta la cámara
+        assertThat(DeviceSessionService.sanitizePermissions(
+                visitPing(SESSION, 0L, null, new PingRequestDTO.Permissions("not-required", "granted", null))).getCamera())
+                .isEqualTo("not-required");
+    }
+
+    private static PingRequestDTO arPing(PingRequestDTO.ArCapability ar) {
+        return new PingRequestDTO("d1", "SM-A155M", "Android 14", "2.2.0", "es-CO", "America/Bogota", "412x915", "4g",
+                SESSION, 1_000L, null, null, ar);
+    }
+
+    @Test
+    void arCapabilityIsStoredOnTheDeviceAndTheVisit() {
+        DeviceSession known = DeviceSession.builder().deviceId("d1").build();
+        deviceExists(known);
+        when(appSessionRepository.findBySessionId(SESSION)).thenReturn(Optional.empty());
+        var ar = new PingRequestDTO.ArCapability("unsupported", null, null, "2026-11-11", "evaluated",
+                List.of("gpu:D:mali-g57-mc2"), "ANGLE (ARM, Mali-G57 MC2, OpenGL ES 3.2)", "D", 4.0, 8, null, null);
+
+        service.registerPing("d1", arPing(ar), "Mozilla/5.0 (Linux; Android 10; K)", "ip", null);
+
+        assertThat(known.getArCapability().getVerdict()).isEqualTo("unsupported");
+        assertThat(known.getArCapability().getReasons()).containsExactly("gpu:D:mali-g57-mc2");
+        assertThat(known.getDeviceModel()).isEqualTo("SM-A155M");
+        ArgumentCaptor<AppSession> visit = ArgumentCaptor.forClass(AppSession.class);
+        verify(appSessionRepository).save(visit.capture());
+        assertThat(visit.getValue().getArCapability().getGpuClass()).isEqualTo("D");
+    }
+
+    @Test
+    void arCapabilityFromThePublicAppIsSanitized() {
+        var dirty = new PingRequestDTO.ArCapability("compatible", "magic", "full", "x".repeat(40), "evaluated",
+                List.of("ram<4", "bench:slow:180/12", "$where", "unknown:ram+gpu", "a", "b", "c", "d", "e", "f"),
+                "Adreno\u0000 (TM) 740 " + "z".repeat(200), "Z", 512.0, -2, 70_000, 12.5);
+
+        var ar = DeviceSessionService.sanitizeArCapability(arPing(dirty));
+
+        assertThat(ar.getTracker()).isNull();
+        assertThat(ar.getProfile()).isEqualTo("full");
+        assertThat(ar.getCriteria()).isNull();
+        assertThat(ar.getReasons()).hasSize(8).startsWith("ram<4", "bench:slow:180/12", "unknown:ram+gpu").doesNotContain("$where");
+        assertThat(ar.getGpu()).hasSize(80).startsWith("Adreno (TM) 740");
+        assertThat(ar.getGpuClass()).isNull();
+        assertThat(ar.getMemoryGb()).isNull();
+        assertThat(ar.getCores()).isNull();
+        assertThat(ar.getBenchFrameMs()).isNull();
+        assertThat(ar.getBenchGpuMs()).isEqualTo(12.5);
+        // Sin un veredicto conocido no se guarda nada
+        assertThat(DeviceSessionService.sanitizeArCapability(arPing(new PingRequestDTO.ArCapability(
+                "maybe", null, null, null, null, null, null, null, null, null, null, null)))).isNull();
+    }
+
+    @Test
+    void clientSentModelAndOsAreBounded() {
+        when(repository.findByDeviceId("d1")).thenReturn(Optional.empty());
+        when(repository.save(any(DeviceSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        PingRequestDTO body = new PingRequestDTO("d1", "m".repeat(500), "o".repeat(500), "2.2.0", null, null, null, null);
+
+        DeviceSession saved = service.registerPing("d1", body, "ua", "ip", null);
+
+        assertThat(saved.getDeviceModel()).hasSize(64);
+        assertThat(saved.getOsVersion()).hasSize(32);
     }
 
     @Test

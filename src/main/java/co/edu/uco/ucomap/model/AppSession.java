@@ -60,4 +60,7 @@ public class AppSession {
 
     /** Último estado de permisos reportado en la visita. */
     private PermissionSnapshot permissions;
+
+    /** Veredicto de la guía con cámara (AR) en la visita. */
+    private ArCapabilitySnapshot arCapability;
 }

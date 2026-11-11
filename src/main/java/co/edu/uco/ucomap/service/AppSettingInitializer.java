@@ -47,6 +47,18 @@ public class AppSettingInitializer implements CommandLineRunner {
                     .category("navigation")
                     .active(true)
                     .updatedAt(Instant.now())
+                    .build(),
+
+            AppSetting.builder()
+                    .key("arOnLimitedDevices")
+                    .value("true")
+                    .type(SettingType.BOOLEAN)
+                    .description("Habilita la guía con cámara en teléfonos «con limitaciones» (gama media: " +
+                            "funciona con menos consultas VPS y menos resolución). Si es false, esos teléfonos " +
+                            "solo usan el mapa, como los no compatibles.")
+                    .category("navigation")
+                    .active(true)
+                    .updatedAt(Instant.now())
                     .build()
 
             // Futuros parámetros de ejemplo (descomentar y ajustar):

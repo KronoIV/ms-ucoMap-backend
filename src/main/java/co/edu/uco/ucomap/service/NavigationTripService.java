@@ -156,7 +156,8 @@ public class NavigationTripService {
         StringBuilder csv = new StringBuilder(
                 "Inicio,Fin,Destino,Edificio,Resultado,Motivo,Duración (s),Inicio en,Dist. inicial (m),"
                         + "Precisión GPS (m),Ruta ext. (m),Ruta int. (m),Llegó al edificio (s),Ubicación VPS (s),"
-                        + "Fallos VPS,Llamadas VPS,Cambios modo,Usó AR,Plataforma,Dispositivo\n");
+                        + "Fallos VPS,Llamadas VPS,Cambios modo,Usó AR,Capacidad AR,FPS AR (mediana),Cierre AR por rendimiento,"
+                        + "Plataforma,Dispositivo\n");
         try (Stream<NavigationTrip> trips = mongoTemplate.stream(query, NavigationTrip.class)) {
             trips.forEach(t -> csv.append(String.join(",",
                     cell(date(t.getStartedAt())), cell(date(t.getEndedAt())),
@@ -167,6 +168,9 @@ public class NavigationTripService {
                     seconds(t.getBuildingReachedMs()), seconds(t.getLocalizedMs()),
                     number(t.getVpsFailures()), number(t.getVpsCalls()), number(t.getModeSwitches()),
                     t.getUsedAR() == null ? "" : (t.getUsedAR() ? "sí" : "no"),
+                    cell(t.getArCapability()),
+                    number(t.getArPerf() == null ? null : t.getArPerf().getFpsMedian()),
+                    cell(t.getArPerf() == null ? null : t.getArPerf().getGuard()),
                     cell(t.getPlatform()), cell(t.getDeviceId()))).append('\n'));
         }
         return csv.toString();
@@ -217,6 +221,7 @@ public class NavigationTripService {
         }
         trip.setStatus(dto.status());
         if (dto.vpsCalls() != null) trip.setVpsCalls(dto.vpsCalls());
+        if (dto.arCapability() != null) trip.setArCapability(dto.arCapability());
         if (dto.status() == TripStatus.IN_PROGRESS) return;
 
         trip.setEndedAt(endedAt(trip, dto, now));
@@ -230,6 +235,7 @@ public class NavigationTripService {
         trip.setVpsFailures(dto.vpsFailures());
         trip.setUsedAR(dto.usedAR());
         trip.setTransition(dto.transition());
+        trip.setArPerf(dto.arPerf());
     }
 
     // ── Métricas ──────────────────────────────────────────────

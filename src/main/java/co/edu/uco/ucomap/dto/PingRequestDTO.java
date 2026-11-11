@@ -1,5 +1,6 @@
 package co.edu.uco.ucomap.dto;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -46,15 +47,30 @@ public record PingRequestDTO(
         Map<String, Integer> features,
 
         /** Estado actual de los permisos. */
-        Permissions permissions
+        Permissions permissions,
+
+        /** Veredicto de la guía con cámara en este teléfono (app ≥ 2.2). Se depura en el servicio. */
+        ArCapability arCapability
 ) {
     public record Permissions(String camera, String location, String motion) {}
+
+    public record ArCapability(String verdict, String tracker, String profile, String criteria, String source,
+                               List<String> reasons, String gpu, String gpuClass, Double memoryGb, Integer cores,
+                               Integer benchFrameMs, Double benchGpuMs) {}
+
+    /** Ping de versiones anteriores de la app (sin veredicto de la cámara). */
+    public PingRequestDTO(String deviceId, String deviceModel, String osVersion, String appVersion,
+                          String language, String timezone, String screenResolution, String networkType,
+                          String sessionId, Long activeMs, Map<String, Integer> features, Permissions permissions) {
+        this(deviceId, deviceModel, osVersion, appVersion, language, timezone, screenResolution, networkType,
+                sessionId, activeMs, features, permissions, null);
+    }
 
     /** Ping de versiones anteriores de la app (solo datos del dispositivo). */
     public PingRequestDTO(String deviceId, String deviceModel, String osVersion, String appVersion,
                           String language, String timezone, String screenResolution, String networkType) {
         this(deviceId, deviceModel, osVersion, appVersion, language, timezone, screenResolution, networkType,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 }
 
