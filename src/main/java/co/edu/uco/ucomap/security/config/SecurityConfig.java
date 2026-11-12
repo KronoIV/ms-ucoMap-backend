@@ -87,6 +87,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/graph/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/settings/**").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/navigation/navmesh").permitAll()
+                .requestMatchers(HttpMethod.GET,   "/api/navigation/elevators").permitAll()
                 .requestMatchers(HttpMethod.POST,  "/api/multiset/token").permitAll()
                 .requestMatchers(HttpMethod.GET,   "/api/events/active").permitAll()
 

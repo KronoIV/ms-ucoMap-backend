@@ -1,10 +1,13 @@
 package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.model.ArPoint;
+import co.edu.uco.ucomap.model.ElevatorStop;
 import co.edu.uco.ucomap.model.NavConnection;
+import co.edu.uco.ucomap.model.NavElevator;
 import co.edu.uco.ucomap.model.NavMeshData;
 import co.edu.uco.ucomap.model.NavPatch;
 import co.edu.uco.ucomap.repository.NavConnectionRepository;
+import co.edu.uco.ucomap.repository.NavElevatorRepository;
 import co.edu.uco.ucomap.repository.NavMeshRepository;
 import co.edu.uco.ucomap.repository.NavPatchRepository;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,7 @@ class NavigationServiceTest {
     @Mock NavConnectionRepository connectionRepository;
     @Mock NavMeshRepository navMeshRepository;
     @Mock NavPatchRepository patchRepository;
+    @Mock NavElevatorRepository elevatorRepository;
     @InjectMocks NavigationService service;
 
     private static byte[] navmesh(int size) {
@@ -137,5 +141,69 @@ class NavigationServiceTest {
     @Test
     void patchWithNonFiniteCoordinatesIsRejected() {
         assertRejectedPatch(patch(0, 0, Double.NaN, 0, 1, 1));
+    }
+
+    /** Parada frente a la puerta del bloque M: los pisos están a 3,6 m. */
+    private static ElevatorStop stop(int floor, double y) {
+        return new ElevatorStop(floor, null, new ArPoint(10, y, 5));
+    }
+
+    private static NavElevator elevator(ElevatorStop... stops) {
+        return NavElevator.builder().label("Ascensor M").building("M").stops(List.of(stops)).build();
+    }
+
+    private void assertRejectedElevator(NavElevator e) {
+        assertThatThrownBy(() -> service.createElevator(e))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(elevatorRepository, never()).save(any());
+    }
+
+    @Test
+    void elevatorIsStoredWithStopsSortedByFloorAndBlanksCleared() {
+        when(elevatorRepository.save(any(NavElevator.class))).thenAnswer(inv -> inv.getArgument(0));
+        ElevatorStop ground = new ElevatorStop(1, "  PB ", new ArPoint(10, 0, 5));
+        ElevatorStop third = new ElevatorStop(3, " ", new ArPoint(10.4, 7.2, 5));
+        NavElevator input = NavElevator.builder().label("  ").building(" M ").stops(List.of(third, stop(2, 3.6), ground)).build();
+
+        NavElevator saved = service.createElevator(input);
+
+        assertThat(saved.getId()).isNotBlank();
+        assertThat(saved.getLabel()).isEqualTo("Ascensor");
+        assertThat(saved.getBuilding()).isEqualTo("M");
+        assertThat(saved.getStops()).extracting(ElevatorStop::getFloor).containsExactly(1, 2, 3);
+        assertThat(saved.getStops()).extracting(ElevatorStop::getButton).containsExactly("PB", null, null);
+    }
+
+    @Test
+    void elevatorNeedsTwoDifferentFloors() {
+        assertRejectedElevator(elevator(stop(1, 0)));
+        assertRejectedElevator(elevator(stop(2, 0), stop(2, 3.6)));
+        assertRejectedElevator(NavElevator.builder().label("x").build());
+    }
+
+    @Test
+    void elevatorFloorsMustFollowTheHeightOfTheirStops() {
+        // El piso 3 marcado por debajo del 2, o dos pisos en la misma planta
+        assertRejectedElevator(elevator(stop(1, 0), stop(2, 7.2), stop(3, 3.6)));
+        assertRejectedElevator(elevator(stop(1, 0), stop(2, 0.4)));
+    }
+
+    @Test
+    void elevatorStopsFarApartOrInvalidAreRejected() {
+        assertRejectedElevator(elevator(stop(1, 0), new ElevatorStop(2, null, new ArPoint(60, 3.6, 5))));
+        assertRejectedElevator(elevator(stop(1, 0), new ElevatorStop(2, null, new ArPoint(10, Double.NaN, 5))));
+        assertRejectedElevator(elevator(stop(1, 0), new ElevatorStop(99, null, new ArPoint(10, 3.6, 5))));
+        assertRejectedElevator(elevator(stop(1, 0), new ElevatorStop(2, "PISO-DOS", new ArPoint(10, 3.6, 5))));
+    }
+
+    @Test
+    void updatingUnknownElevatorReturnsNotFound() {
+        when(elevatorRepository.findById("x")).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.updateElevator("x", elevator(stop(1, 0), stop(2, 3.6))))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(elevatorRepository, never()).save(any());
     }
 }

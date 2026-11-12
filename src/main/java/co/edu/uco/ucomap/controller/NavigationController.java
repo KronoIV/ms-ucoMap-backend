@@ -2,6 +2,7 @@ package co.edu.uco.ucomap.controller;
 
 import co.edu.uco.ucomap.common.dto.ApiSuccess;
 import co.edu.uco.ucomap.model.NavConnection;
+import co.edu.uco.ucomap.model.NavElevator;
 import co.edu.uco.ucomap.model.NavMeshData;
 import co.edu.uco.ucomap.model.NavPatch;
 import co.edu.uco.ucomap.service.NavigationService;
@@ -77,6 +78,31 @@ public class NavigationController {
     @DeleteMapping("/patches/{id}")
     public ResponseEntity<ApiSuccess<Void>> deletePatch(@PathVariable String id) {
         navigationService.deletePatch(id);
+        return ResponseEntity.ok(ApiSuccess.of(null));
+    }
+
+    // ── Ascensores ─────────────────────────────────────────────
+
+    /** Público: la app AR los descarga al iniciar (guía al ascensor cuando el destino está en otro piso). */
+    @GetMapping("/elevators")
+    public ResponseEntity<ApiSuccess<List<NavElevator>>> getElevators() {
+        return ResponseEntity.ok(ApiSuccess.of(navigationService.findAllElevators()));
+    }
+
+    @PostMapping("/elevators")
+    public ResponseEntity<ApiSuccess<NavElevator>> createElevator(@RequestBody NavElevator elevator) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiSuccess.of(navigationService.createElevator(elevator)));
+    }
+
+    @PutMapping("/elevators/{id}")
+    public ResponseEntity<ApiSuccess<NavElevator>> updateElevator(@PathVariable String id, @RequestBody NavElevator elevator) {
+        return ResponseEntity.ok(ApiSuccess.of(navigationService.updateElevator(id, elevator)));
+    }
+
+    @DeleteMapping("/elevators/{id}")
+    public ResponseEntity<ApiSuccess<Void>> deleteElevator(@PathVariable String id) {
+        navigationService.deleteElevator(id);
         return ResponseEntity.ok(ApiSuccess.of(null));
     }
 

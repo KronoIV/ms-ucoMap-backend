@@ -2,10 +2,13 @@ package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.common.error.ErrorCode;
 import co.edu.uco.ucomap.model.ArPoint;
+import co.edu.uco.ucomap.model.ElevatorStop;
 import co.edu.uco.ucomap.model.NavConnection;
+import co.edu.uco.ucomap.model.NavElevator;
 import co.edu.uco.ucomap.model.NavMeshData;
 import co.edu.uco.ucomap.model.NavPatch;
 import co.edu.uco.ucomap.repository.NavConnectionRepository;
+import co.edu.uco.ucomap.repository.NavElevatorRepository;
 import co.edu.uco.ucomap.repository.NavMeshRepository;
 import co.edu.uco.ucomap.repository.NavPatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,9 +39,19 @@ public class NavigationService {
     private static final double MAX_PATCH_EXTENT_M = 50;
     private static final double MIN_PATCH_AREA_M2 = 0.05;
 
+    private static final int MAX_ELEVATOR_STOPS = 60;
+    // Mismo rango que el piso de los salones
+    private static final int MIN_FLOOR = -5;
+    private static final int MAX_FLOOR = 60;
+    private static final int MAX_BUTTON_LENGTH = 6;
+    // Paradas de un mismo ascensor: cada piso más arriba que el anterior y todas las puertas cerca en planta
+    private static final double MIN_STOP_RISE_M = 1.5;
+    private static final double MAX_STOP_SPREAD_M = 20;
+
     private final NavConnectionRepository connectionRepository;
     private final NavMeshRepository navMeshRepository;
     private final NavPatchRepository patchRepository;
+    private final NavElevatorRepository elevatorRepository;
 
     // ── Conexiones (escaleras) ─────────────────────────────────
 
@@ -145,6 +159,83 @@ public class NavigationService {
         if (!valid) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR.getMessage());
         }
+    }
+
+    // ── Ascensores ─────────────────────────────────────────────
+
+    public List<NavElevator> findAllElevators() {
+        return elevatorRepository.findAll();
+    }
+
+    public NavElevator createElevator(NavElevator elevator) {
+        normalize(elevator);
+        elevator.setId(UUID.randomUUID().toString());
+        NavElevator saved = elevatorRepository.save(elevator);
+        log.info("Ascensor creado — id={} label={} paradas={}", saved.getId(), saved.getLabel(), saved.getStops().size());
+        return saved;
+    }
+
+    public NavElevator updateElevator(String id, NavElevator updated) {
+        normalize(updated);
+        NavElevator existing = elevatorRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
+        existing.setLabel(updated.getLabel());
+        existing.setBuilding(updated.getBuilding());
+        existing.setStops(updated.getStops());
+        NavElevator saved = elevatorRepository.save(existing);
+        log.info("Ascensor actualizado — id={}", id);
+        return saved;
+    }
+
+    public void deleteElevator(String id) {
+        if (!elevatorRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage());
+        }
+        elevatorRepository.deleteById(id);
+        log.info("Ascensor eliminado — id={}", id);
+    }
+
+    /**
+     * Valida y deja listo para guardar: paradas ordenadas por piso, botones vacíos como null, nombre y edificio sin
+     * espacios sobrantes. Los números de piso deben seguir la altura y las puertas estar cerca en planta: así una parada
+     * marcada en el piso o en el ascensor equivocado no llega a la app.
+     */
+    private void normalize(NavElevator e) {
+        List<ElevatorStop> stops = e.getStops();
+        boolean valid = stops != null && stops.size() >= 2 && stops.size() <= MAX_ELEVATOR_STOPS
+                && stops.stream().allMatch(s -> s != null && s.getFloor() != null
+                        && s.getFloor() >= MIN_FLOOR && s.getFloor() <= MAX_FLOOR && isFinite(s.getPoint())
+                        && (s.getButton() == null || s.getButton().trim().length() <= MAX_BUTTON_LENGTH));
+        List<ElevatorStop> sorted = valid
+                ? stops.stream().sorted(Comparator.comparing(ElevatorStop::getFloor)).toList()
+                : List.of();
+        for (int i = 1; valid && i < sorted.size(); i++) {
+            ElevatorStop lower = sorted.get(i - 1), upper = sorted.get(i);
+            valid = !upper.getFloor().equals(lower.getFloor())
+                    && upper.getPoint().getY() - lower.getPoint().getY() >= MIN_STOP_RISE_M;
+        }
+        for (ElevatorStop a : sorted) {
+            for (ElevatorStop b : sorted) {
+                valid &= Math.hypot(a.getPoint().getX() - b.getPoint().getX(),
+                        a.getPoint().getZ() - b.getPoint().getZ()) <= MAX_STOP_SPREAD_M;
+            }
+        }
+        if (!valid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR.getMessage());
+        }
+        e.setStops(sorted.stream().map(s -> new ElevatorStop(s.getFloor(), blankToNull(s.getButton()), s.getPoint())).toList());
+        String label = blankToNull(e.getLabel());
+        e.setLabel(label != null ? label : "Ascensor");
+        e.setBuilding(blankToNull(e.getBuilding()));
+    }
+
+    private static boolean isFinite(ArPoint p) {
+        return p != null && Double.isFinite(p.getX()) && Double.isFinite(p.getY()) && Double.isFinite(p.getZ());
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     // ── Navmesh ────────────────────────────────────────────────
