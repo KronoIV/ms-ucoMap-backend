@@ -2,12 +2,10 @@ package co.edu.uco.ucomap.service;
 
 import co.edu.uco.ucomap.model.Building;
 import co.edu.uco.ucomap.model.GpsPoint;
-import co.edu.uco.ucomap.model.MapConfig;
 import co.edu.uco.ucomap.model.NodeType;
 import co.edu.uco.ucomap.model.PoiClip;
 import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
-import co.edu.uco.ucomap.repository.MapConfigRepository;
 import co.edu.uco.ucomap.repository.PoiClipRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BuildingService {
 
-    private static final String CONFIG_ID = "campus_config";
-
     private final BuildingRepository  buildingRepository;
-    private final MapConfigRepository mapConfigRepository;
     private final PoiClipRepository   poiClipRepository;
     private final GraphNodeRepository nodeRepository;
     private final BuildingNodeSync    buildingSync;
@@ -146,21 +141,6 @@ public class BuildingService {
                     ErrorCode.VALIDATION_ERROR.getMessage());
         }
         return value.trim();
-    }
-
-    // ── Map Config ─────────────────────────────────────────────
-
-    public MapConfig getMapConfig() {
-        return mapConfigRepository.findById(CONFIG_ID)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
-    }
-
-    public MapConfig saveMapConfig(MapConfig config) {
-        config.setId(CONFIG_ID);
-        MapConfig saved = mapConfigRepository.save(config);
-        log.info("Configuración del mapa actualizada");
-        return saved;
     }
 
     // ── POI Clips ──────────────────────────────────────────────

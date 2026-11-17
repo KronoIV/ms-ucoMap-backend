@@ -73,7 +73,6 @@ public class GraphService {
         // Arrastrar el punto reenvía el nombre: solo un cambio real renombra el edificio
         boolean labelChanged = !Objects.equals(existing.getLabel(), updated.getLabel());
         existing.setGps(updated.getGps());
-        existing.setPixel(updated.getPixel());
         existing.setLabel(updated.getLabel());
         existing.setNodeType(updated.getNodeType());
         existing.setPoiType(updated.getPoiType());

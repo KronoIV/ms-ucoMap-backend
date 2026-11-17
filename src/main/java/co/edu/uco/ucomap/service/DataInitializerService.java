@@ -27,7 +27,6 @@ public class DataInitializerService {
     private final GraphEdgeRepository graphEdgeRepo;
     private final BuildingRepository  buildingRepo;
     private final RoomRepository      roomRepo;
-    private final MapConfigRepository mapConfigRepo;
     private final PoiClipRepository   poiClipRepo;
 
     @Value("${app.data.init-on-startup:true}")
@@ -39,31 +38,12 @@ public class DataInitializerService {
             log.info("DataInitializer desactivado (INIT_DATA=false)");
             return;
         }
-        seedMapConfig();
         seedGraphNodes();
         seedGraphEdges();
         seedBuildings();
         seedRooms();
         seedPoiClips();
         log.info("✅ DataInitializer completado — base de datos lista");
-    }
-
-    // =========================================================
-    // MAP CONFIG
-    // =========================================================
-
-    private void seedMapConfig() {
-        if (mapConfigRepo.count() > 0) return;
-        mapConfigRepo.save(MapConfig.builder()
-                .id("campus_config")
-                .northWest(new GpsPoint(6.1518902937, -75.3675318802))
-                .southEast(new GpsPoint(6.1485689719, -75.3659444386))
-                .renderWidth(500)
-                .renderHeight(800)
-                .arrivalThresholdMeters(20.0)
-                .outdoorThresholdMeters(50.0)
-                .build());
-        log.info("  ↳ MapConfig sembrado");
     }
 
     // =========================================================
@@ -76,48 +56,46 @@ public class DataInitializerService {
         List<GraphNode> nodes = List.of(
             // ── Edificios destino ────────────────────────────────
             node("EDC",     NodeType.BUILDING,  "EDC",
-                 6.151164296413953,  -75.3665822995127,  88,  650),
+                 6.151164296413953,  -75.3665822995127),
             node("COLEGIO", NodeType.BUILDING,  "COLEGIO",
-                 6.149879545997976,  -75.3660539173641, 120,  260),
+                 6.149879545997976,  -75.3660539173641),
 
             // ── Entradas del campus ──────────────────────────────
             node("E1",  NodeType.ENTRANCE, "Entrada 1",
-                 6.149554545318648,  -75.36742240149525, 454, 440),
+                 6.149554545318648,  -75.36742240149525),
             node("E2",  NodeType.ENTRANCE, "Entrada 2",
-                 6.148940504718373,  -75.36624372399544, 320, 120),
+                 6.148940504718373,  -75.36624372399544),
             node("E3",  NodeType.ENTRANCE, "Entrada 3",
-                 6.150593632727961,  -75.36703093407297, 255, 595),
+                 6.150593632727961,  -75.36703093407297),
 
             // ── Intersecciones internas (waypoints) ──────────────
-            node("P1",  NodeType.WAYPOINT, null, 6.149463, -75.366370, 290, 250),
-            node("P2",  NodeType.WAYPOINT, null, 6.149370, -75.367230, 235, 267),
-            node("P3",  NodeType.WAYPOINT, null, 6.149595, -75.366564, 308, 281),
-            node("P4",  NodeType.WAYPOINT, null, 6.149600, -75.367500, 180, 270),
-            node("P5",  NodeType.WAYPOINT, null, 6.149679, -75.366713, 328, 328),
-            node("P6",  NodeType.WAYPOINT, null, 6.149791, -75.367063, 388, 429),
-            node("P7",  NodeType.WAYPOINT, null, 6.149926, -75.366562, 255, 345),
-            node("P8",  NodeType.WAYPOINT, null, 6.150700, -75.367800, 127, 570),
-            node("P9",  NodeType.WAYPOINT, null, 6.150826, -75.366551, 150, 518),
-            node("P10", NodeType.WAYPOINT, null, 6.150669, -75.366463, 155, 480),
-            node("P11", NodeType.WAYPOINT, null, 6.150640, -75.366286, 130, 420),
-            node("P12", NodeType.WAYPOINT, null, 6.150103, -75.366097, 160, 310),
-            node("P13", NodeType.WAYPOINT, null, 6.151259, -75.366795, 150, 670),
-            node("P14", NodeType.WAYPOINT, null, 6.150695, -75.366897, 220, 570),
-            node("P15", NodeType.WAYPOINT, null, 6.150522, -75.366957, 255, 565)
+            node("P1",  NodeType.WAYPOINT, null, 6.149463, -75.366370),
+            node("P2",  NodeType.WAYPOINT, null, 6.149370, -75.367230),
+            node("P3",  NodeType.WAYPOINT, null, 6.149595, -75.366564),
+            node("P4",  NodeType.WAYPOINT, null, 6.149600, -75.367500),
+            node("P5",  NodeType.WAYPOINT, null, 6.149679, -75.366713),
+            node("P6",  NodeType.WAYPOINT, null, 6.149791, -75.367063),
+            node("P7",  NodeType.WAYPOINT, null, 6.149926, -75.366562),
+            node("P8",  NodeType.WAYPOINT, null, 6.150700, -75.367800),
+            node("P9",  NodeType.WAYPOINT, null, 6.150826, -75.366551),
+            node("P10", NodeType.WAYPOINT, null, 6.150669, -75.366463),
+            node("P11", NodeType.WAYPOINT, null, 6.150640, -75.366286),
+            node("P12", NodeType.WAYPOINT, null, 6.150103, -75.366097),
+            node("P13", NodeType.WAYPOINT, null, 6.151259, -75.366795),
+            node("P14", NodeType.WAYPOINT, null, 6.150695, -75.366897),
+            node("P15", NodeType.WAYPOINT, null, 6.150522, -75.366957)
         );
 
         graphNodeRepo.saveAll(nodes);
         log.info("  ↳ {} GraphNodes sembrados", nodes.size());
     }
 
-    private GraphNode node(String id, NodeType type, String label,
-                           double lat, double lng, int px, int py) {
+    private GraphNode node(String id, NodeType type, String label, double lat, double lng) {
         return GraphNode.builder()
                 .nodeId(id)
                 .nodeType(type)
                 .label(label)
                 .gps(new GpsPoint(lat, lng))
-                .pixel(new PixelPoint(px, py))
                 .build();
     }
 

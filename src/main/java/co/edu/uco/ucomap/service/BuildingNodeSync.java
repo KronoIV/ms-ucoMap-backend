@@ -3,7 +3,6 @@ package co.edu.uco.ucomap.service;
 import co.edu.uco.ucomap.model.Building;
 import co.edu.uco.ucomap.model.GraphNode;
 import co.edu.uco.ucomap.model.NodeType;
-import co.edu.uco.ucomap.model.PixelPoint;
 import co.edu.uco.ucomap.repository.BuildingRepository;
 import co.edu.uco.ucomap.repository.GraphNodeRepository;
 import lombok.RequiredArgsConstructor;
@@ -80,7 +79,7 @@ public class BuildingNodeSync implements ApplicationRunner {
         String nodeId = nodeIdOf(building);
         GraphNode node = nodeRepository.findById(nodeId).orElse(null);
         if (node == null && (!createNode || building.getGps() == null)) return;
-        if (node == null) node = GraphNode.builder().nodeId(nodeId).pixel(new PixelPoint(0, 0)).build();
+        if (node == null) node = GraphNode.builder().nodeId(nodeId).build();
         if (building.getGps() != null) node.setGps(building.getGps());
         node.setLabel(building.getLabel());
         node.setNodeType(NodeType.BUILDING);

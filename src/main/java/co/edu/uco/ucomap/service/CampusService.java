@@ -46,7 +46,6 @@ public class CampusService {
                 .graphEdges(graphService.findAllEdgesAsPairs())
                 .blocks(blockDTOs)
                 .blockGps(buildingService.findBlockGpsMap())
-                .mapConfig(buildingService.getMapConfig())
                 .build();
     }
 
@@ -57,12 +56,6 @@ public class CampusService {
                         .lat(node.getGps().getLat())
                         .lng(node.getGps().getLng())
                         .build())
-                .pixel(node.getPixel() != null
-                        ? PixelDTO.builder()
-                                .x(node.getPixel().getX())
-                                .y(node.getPixel().getY())
-                                .build()
-                        : null)
                 .label(node.getLabel())
                 .nodeType(node.getNodeType() != null ? node.getNodeType().name() : null)
                 .poiType(node.getPoiType())
@@ -77,7 +70,6 @@ public class CampusService {
                         .lat(b.getGps().getLat())
                         .lng(b.getGps().getLng())
                         .build())
-                .pixel(null)
                 .label(b.getLabel())
                 .color(b.getColor())
                 .category(b.getCategory())

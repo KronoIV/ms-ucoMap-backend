@@ -1,6 +1,5 @@
 package co.edu.uco.ucomap.dto;
 
-import co.edu.uco.ucomap.model.MapConfig;
 import co.edu.uco.ucomap.model.Room;
 import lombok.Builder;
 import lombok.Data;
@@ -55,20 +54,13 @@ public class CampusDataDTO {
      */
     private Map<String, Object> blockGps;
 
-    /**
-     * Límites del mapa y umbrales de distancia.
-     * Reemplaza: const MAP_BOUNDS, ARRIVAL_THRESHOLD_METERS, OUTDOOR_THRESHOLD_METERS
-     */
-    private MapConfig mapConfig;
-
-    // ── DTOs anidados ────────────────────────────────────────────
+    // ── DTOs anidados ────────────────────────────────────────────────────────────
 
     @Data
     @Builder
     public static class GraphNodeDTO {
         private String   id;
         private GpsDTO   gps;
-        private PixelDTO pixel;
         private String   label;
         private String   nodeType;
         private String   poiType;
@@ -80,7 +72,6 @@ public class CampusDataDTO {
     @Builder
     public static class BuildingDTO {
         private GpsDTO   gps;
-        private PixelDTO pixel;
         private String   label;
         private String   color;
         private String   category;
@@ -91,13 +82,6 @@ public class CampusDataDTO {
     public static class GpsDTO {
         private double lat;
         private double lng;
-    }
-
-    @Data
-    @Builder
-    public static class PixelDTO {
-        private int x;
-        private int y;
     }
 }
 

@@ -28,9 +28,6 @@ public class GraphNode {
     /** Coordenadas GPS reales del nodo. */
     private GpsPoint gps;
 
-    /** Posición en el render isométrico 500×800. */
-    private PixelPoint pixel;
-
     /** Etiqueta visible (solo para BUILDING y ENTRANCE). */
     private String label;
 

@@ -2,7 +2,6 @@ package co.edu.uco.ucomap.controller;
 
 import co.edu.uco.ucomap.common.dto.ApiSuccess;
 import co.edu.uco.ucomap.model.Building;
-import co.edu.uco.ucomap.model.MapConfig;
 import co.edu.uco.ucomap.model.PoiClip;
 import co.edu.uco.ucomap.service.BuildingService;
 import jakarta.validation.Valid;
@@ -15,16 +14,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Gestión de edificios, configuración del mapa y POI clips.
+ * Gestión de edificios y POI clips.
  *
  * GET    /api/buildings              — todos los edificios activos
  * GET    /api/buildings/{id}         — edificio específico
  * POST   /api/buildings              — crear edificio
  * PUT    /api/buildings/{id}         — actualizar edificio
  * DELETE /api/buildings/{id}         — eliminar edificio (físico)
- *
- * GET    /api/map/config             — configuración del mapa (bounds, umbrales)
- * PUT    /api/map/config             — actualizar configuración
  *
  * GET    /api/poi-clips              — todos los clips activos
  * GET    /api/poi-clips/map          — mapa clipId → displayName
@@ -66,18 +62,6 @@ public class BuildingController {
     public ResponseEntity<ApiSuccess<Void>> deleteBuilding(@PathVariable String buildingId) {
         buildingService.delete(buildingId);
         return ResponseEntity.ok(ApiSuccess.of(null));
-    }
-
-    // ── Map Config ─────────────────────────────────────────────
-
-    @GetMapping("/api/map/config")
-    public ResponseEntity<ApiSuccess<MapConfig>> getMapConfig() {
-        return ResponseEntity.ok(ApiSuccess.of(buildingService.getMapConfig()));
-    }
-
-    @PutMapping("/api/map/config")
-    public ResponseEntity<ApiSuccess<MapConfig>> updateMapConfig(@Valid @RequestBody MapConfig config) {
-        return ResponseEntity.ok(ApiSuccess.of(buildingService.saveMapConfig(config)));
     }
 
     // ── POI Clips ──────────────────────────────────────────────
