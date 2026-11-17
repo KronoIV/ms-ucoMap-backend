@@ -26,6 +26,7 @@ import co.edu.uco.ucomap.service.AnalyticsService;
 import co.edu.uco.ucomap.service.CampusEventService;
 import co.edu.uco.ucomap.service.GraphService;
 import co.edu.uco.ucomap.service.MultiSetService;
+import co.edu.uco.ucomap.service.MultiSetUsageService;
 import co.edu.uco.ucomap.service.NavigationTripService;
 import co.edu.uco.ucomap.service.PasswordResetService;
 import co.edu.uco.ucomap.service.UserService;
@@ -57,6 +58,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,6 +86,7 @@ class SecurityIntegrationTest {
     @MockitoBean UserService userService;
     @MockitoBean PasswordResetService passwordResetService;
     @MockitoBean MultiSetService multiSetService;
+    @MockitoBean MultiSetUsageService multiSetUsageService;
     @MockitoBean AnalyticsService analyticsService;
     @MockitoBean CampusEventService eventService;
 
@@ -134,6 +137,17 @@ class SecurityIntegrationTest {
         mvc.perform(get("/api/multiset/map-meshes")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/multiset/token")).andExpect(status().isUnauthorized());
         verify(multiSetService, never()).getMapMeshes(anyBoolean());
+    }
+
+    @Test
+    void multiSetUsageIsAdminOnly() throws Exception {
+        mvc.perform(get("/api/multiset/usage")).andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/multiset/usage").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        verify(multiSetUsageService, never()).usage();
+
+        mvc.perform(get("/api/multiset/usage").header("Authorization", bearer())).andExpect(status().isOk());
+        verify(multiSetUsageService).usage();
     }
 
     @Test

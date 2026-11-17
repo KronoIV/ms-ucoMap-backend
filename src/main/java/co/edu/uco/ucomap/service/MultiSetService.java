@@ -38,14 +38,17 @@ public class MultiSetService {
     private final String mapSetCode;
     private final TokenCache adminTokens;
     private final TokenCache vpsTokens;
+    private final MultiSetUsageService usage;
 
     public MultiSetService(
+            MultiSetUsageService usage,
             @Value("${app.multiset.api-endpoint}") String apiEndpoint,
             @Value("${app.multiset.client-id}") String clientId,
             @Value("${app.multiset.client-secret}") String clientSecret,
             @Value("${app.multiset.map-set-code}") String mapSetCode,
             @Value("${app.multiset.query-client-id:}") String queryClientId,
             @Value("${app.multiset.query-client-secret:}") String queryClientSecret) {
+        this.usage = usage;
         this.client = RestClient.builder().baseUrl(apiEndpoint).build();
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -85,6 +88,7 @@ public class MultiSetService {
         }
         try {
             String token = getToken();
+            usage.recordBackendCall();
             JsonNode mapSet = client.get()
                     .uri("vps/map-set/{code}", mapSetCode)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -98,6 +102,7 @@ public class MultiSetService {
                 String link = map.path("mapMesh").path(meshType).path("meshLink").asText("");
                 if (link.isEmpty()) continue;
 
+                usage.recordBackendCall();
                 JsonNode file = client.get()
                         .uri("file?key={key}", link)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -145,6 +150,7 @@ public class MultiSetService {
             }
             String basic = Base64.getEncoder()
                     .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
+            usage.recordBackendCall();
             JsonNode body = client.post()
                     .uri("m2m/token")
                     .header(HttpHeaders.AUTHORIZATION, "Basic " + basic)
