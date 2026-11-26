@@ -1,6 +1,11 @@
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
+
+### Variables de entorno con valores reales (solo se versiona .env.example) ###
+.env
+.env.*
+!.env.example
 !**/src/main/**/target/
 !**/src/test/**/target/
 

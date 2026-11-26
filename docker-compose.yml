@@ -29,6 +29,9 @@ services:
       - PASSWORD_RESET_EXPIRY_MINUTES
       - PASSWORD_RESET_COOLDOWN_MINUTES
       - PASSWORD_RESET_EMAIL_SUBJECT
+      - MULTISET_CLIENT_ID
+      - MULTISET_CLIENT_SECRET
+      - MULTISET_MAP_SET_CODE
     restart: unless-stopped
 
   # ── MongoDB local (opcional, para desarrollo sin Atlas) ──
