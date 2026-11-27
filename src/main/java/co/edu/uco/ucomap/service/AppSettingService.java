@@ -87,16 +87,6 @@ public class AppSettingService {
         return toResponse(saved);
     }
 
-    /** Cambia solo el valor (lo mismo que guardar el parámetro desde el panel). Sin efecto si no existe. */
-    public void setValue(String key, String value) {
-        repository.findById(key).ifPresent(setting -> {
-            setting.setValue(value);
-            setting.setUpdatedAt(Instant.now());
-            repository.save(setting);
-            log.info("Parámetro actualizado automáticamente — key={} valor={}", key, value);
-        });
-    }
-
     /** Elimina físicamente un parámetro. Lanza 404 si no existe. */
     public void delete(String key) {
         if (!repository.existsById(key)) {

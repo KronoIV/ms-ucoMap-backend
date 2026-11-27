@@ -26,6 +26,6 @@ Documentación humana: `README.md`, `docs/ECOSISTEMA.md`, `docs/GUIA-ESTUDIANTES
    `.env.railway`.
 2. Mantén el sobre `ApiSuccess` / `ApiError` y la compatibilidad de contratos con `uco-map-admin` y `uco-map-app`.
 3. Todo endpoint nuevo necesita su regla en `SecurityConfig` (público o ADMIN) y pruebas.
-4. No apuntes a la base de producción ni llames a MultiSet en pruebas.
+4. No apuntes a la base de producción ni llames a servicios externos en pruebas.
 5. Comentarios, mensajes de error y logs en español; identificadores en inglés.
 6. Verifica con `./mvnw test` antes de terminar.

@@ -50,7 +50,7 @@ public class Room {
     /** URL del modelo 3D (para uso futuro). */
     private String modelUrl;
 
-    /** Destino AR en el mapa MultiSet. Si es null, la app usa el clip {@code stateId} de la escena. */
+    /** Destino AR en el espacio del mapa del VPS. Si es null, la app usa el clip {@code stateId} de la escena. */
     private ArPoint arPosition;
 
     /** Piso donde está (negativo = sótano); null = sin definir. */

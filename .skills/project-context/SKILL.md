@@ -12,7 +12,8 @@ API REST (`/api/**`) que da servicio a dos clientes:
 - **Panel admin** (`uco-map-admin`, React): CRUD de datos del campus, navmesh, eventos, usuarios, analítica. Usa JWT.
 - **App** (`uco-map-app`, web móvil AR): lee datos públicos y envía telemetría (sesiones y recorridos). Sin login.
 
-Además es intermediario de MultiSet (guarda el secreto y entrega tokens VPS cortos) y envía el correo de
+Además firma los tokens del VPS propio
+(`vps-server`; no le reenvía fotos) y envía el correo de
 restablecer contraseña por SMTP (Gmail).
 
 ## Stack verificado (`pom.xml`)
@@ -26,7 +27,7 @@ restablecer contraseña por SMTP (Gmail).
 
 ```bash
 ./mvnw spring-boot:run          # arranca en :8080 (lee backend/.env si existe)
-./mvnw test                     # 189 pruebas, sin MongoDB
+./mvnw test                     # 199 pruebas, sin MongoDB
 ./mvnw -DskipTests package      # target/backend-0.0.1-SNAPSHOT.jar
 docker build -t ucomap-backend . # imagen (el Dockerfile corre ./mvnw package CON pruebas)
 ```
@@ -38,9 +39,12 @@ MongoDB local para desarrollo: `docker run -d --name ucomap-mongo -p 27017:27017
 - `src/main/resources/application.properties` no contiene secretos: usa `${VAR}`.
   `spring.config.import=optional:file:.env[.properties]` carga `backend/.env` (git-ignorado) si existe.
 - Obligatorias: `MONGODB_URI`, `JWT_SECRET` (≥ 32 caracteres, lo valida `JwtUtil.init()`), `MAIL_USERNAME`,
-  `MAIL_PASSWORD`, `MULTISET_CLIENT_ID`, `MULTISET_CLIENT_SECRET` (estas dos pueden estar vacías en local).
-- Opcionales con valor por defecto: `MULTISET_MAP_SET_CODE`, `MULTISET_QUERY_CLIENT_ID/SECRET`, `RATE_LIMIT_MAX`
+  `MAIL_PASSWORD`.
+- Opcionales con valor por defecto: `RATE_LIMIT_MAX`
   (600), `RATE_LIMIT_AUTH_MAX` (10), `RATE_LIMIT_WINDOW` (60), `RATE_LIMIT_TRUSTED_PROXIES`, `LOG_LEVEL` (INFO).
+- VPS propio (opcionales; sin `VPS_BASE_URL` o `VPS_TOKEN_SECRET`, `/api/vps/*` responde 503): `VPS_BASE_URL`,
+  `VPS_TOKEN_SECRET` (≥ 32), `VPS_TOKEN_KID` (k1), `VPS_MAP_SET_ID` (uco), `VPS_TOKEN_TTL_SECONDS` (600),
+  `VPS_ADMIN_TOKEN_TTL_SECONDS` (1800).
 - Plantilla: `.env.example`. Valores reales de producción: los entrega el responsable (nunca al repo).
 - Las pruebas usan `src/test/resources/application.properties`, que reemplaza al de `main` (Mongo local, secretos
   ficticios, `app.data.init-on-startup=false`, `app.mongo.ensure-indexes=false`).
@@ -53,8 +57,7 @@ MongoDB local para desarrollo: `docker run -d --name ucomap-mongo -p 27017:27017
    - `AppSettingInitializer` crea `enableIndoorARNavigation` y `arOnLimitedDevices` si faltan.
    - `AdminInitializer` crea `admin@admin.com` (contraseña fija en el código) si no existe.
    - `BuildingNodeSync` reconcilia edificios ⇄ nodos `BUILDING` del grafo.
-3. Tareas programadas (`@EnableScheduling`): `SessionEventPublisher` (cada 25 s, SSE) y `MultiSetUsageService`
-   (cada 2 min: estima cuota y puede apagar la guía AR al 98 %).
+3. Tareas programadas (`@EnableScheduling`): `SessionEventPublisher` (cada 25 s, SSE).
 
 ## Producción
 
@@ -67,7 +70,7 @@ MongoDB local para desarrollo: `docker run -d --name ucomap-mongo -p 27017:27017
 - No poner valores reales en `application.properties`, `.env.example`, pruebas ni logs.
 - No apuntar `MONGODB_URI` local a la base de producción (al arrancar escribe índices, semillas y sincronización).
 - No cambiar rutas, campos ni formas de respuesta sin revisar `uco-map-admin/src/services` y `uco-map-app/src/services`.
-- No llamar a MultiSet en pruebas (cobra por llamada): usa mocks como en `MultiSetUsageServiceTest`.
+- No llamar a servicios externos en pruebas: usa mocks como en `NavigationTripServiceTest`.
 
 ## Más contexto
 

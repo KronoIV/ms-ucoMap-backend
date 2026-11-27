@@ -31,7 +31,6 @@ description: Modelo de datos MongoDB del backend UCO MAP (colecciones, campos, r
 | `nav_elevators` | `NavElevator` | `id` | `label`, `building`, `stops` |
 | `nav_blocks` | `NavBlock` | `id` | `kind` (`AREA`, `BARRIER`, `CONNECTION`), `polygons`, `line`, `connectionId` |
 | `scan_edits` | `ScanEdit` | `id` | `meshes` (triángulos quitados del escaneo), `center`, `triangleCount` |
-| `multiset_quota` | `MultiSetQuota` | `"quota"` (único) | `plan`, `limit`, `monthly`, `resetDay`, `autoDisablePercent` (98), línea base, `autoDisabledAt` |
 
 ## Relaciones (por convención, sin claves foráneas)
 
@@ -52,8 +51,8 @@ erDiagram
 
 - `BuildingNodeSync` mantiene **1:1** cada `Building` activo con un nodo `BUILDING` (crear/mover/ocultar). Al
   borrar un nodo de grafo se usa `active=false`; `GraphService` filtra aristas cuyos extremos no están activos.
-- `Room.arPosition` y todos los `ArPoint` están en el **espacio del map set de MultiSet** (metros). Si cambia el
-  map set (`MULTISET_MAP_SET_CODE`) hay que rehacer puntos AR, parches, conexiones y el navmesh.
+- `Room.arPosition` y todos los `ArPoint` están en el **espacio del map set del VPS propio** (metros). Si cambia el
+  map set (`VPS_MAP_SET_ID`) hay que rehacer puntos AR, parches, conexiones y el navmesh.
 
 ## Índices
 

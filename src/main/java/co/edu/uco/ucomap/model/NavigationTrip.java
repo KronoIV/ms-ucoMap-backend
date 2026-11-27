@@ -73,7 +73,7 @@ public class NavigationTrip {
     private Integer modeSwitches;
     private Integer vpsFailures;
     private Boolean usedAR;
-    /** Llamadas a la API de MultiSet (VPS) hechas durante el recorrido; se actualiza también con cada aviso. */
+    /** Llamadas al VPS hechas durante el recorrido; se actualiza también con cada aviso. */
     private Integer vpsCalls;
 
     /** Cómo se decidió el paso exterior → interior. */

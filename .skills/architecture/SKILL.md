@@ -58,7 +58,7 @@ common/
 | Viajes | `service/NavigationTripService.java` | Upsert público por `tripId`, heartbeats, expiración por inactividad, resumen y CSV. |
 | Sesiones | `service/DeviceSessionService.java`, `SessionEventPublisher.java` | Ping de la app, estadísticas y stream SSE para el panel. |
 | Analítica | `service/AnalyticsService.java`, `service/analytics/*` | Indicadores por periodo, zona horaria y plataforma. |
-| MultiSet | `service/MultiSetService.java`, `MultiSetUsageService.java` | Tokens (caché), URLs de mallas, estimación de cuota y apagado automático de la AR. |
+| VPS propio | `service/UcoVpsService.java`, `controller/UcoVpsController.java`, `dto/UcoVpsDTO.java` | Firma tokens HS256 con `kid` (`iss=ucomap-backend`, `aud=ucomap-vps`; alcance `localize` 10 min o `admin` 30 min). No llama al VPS. |
 | Contraseña | `service/PasswordResetService.java`, `EmailService.java`, `templates/email/password-reset.html` | Token aleatorio guardado como hash, enfriamiento, correo Thymeleaf. |
 
 ## Convenciones
@@ -67,7 +67,7 @@ common/
 - Logs con `@Slf4j` y parámetros `{}`; nunca registrar contraseñas, tokens ni URIs con credenciales. El patrón de
   log elimina saltos de línea (prevención de inyección en logs).
 - Fechas como `Instant` (UTC). Coordenadas GPS en `GpsPoint {lat, lng}`; coordenadas AR en `ArPoint {x, y, z}`
-  (espacio del map set de MultiSet).
+  (espacio del map set del VPS propio).
 - Borrado lógico frecuente con `active=false` (edificios, nodos, salones, usuarios) en lugar de eliminar.
 
 ## Dónde poner un cambio

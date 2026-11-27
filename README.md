@@ -12,7 +12,8 @@ del campus en MongoDB y los sirve al panel de administración y a la app de los 
 - Autenticar a los administradores (JWT) y proteger las operaciones de escritura.
 - Recibir la telemetría de la app (sesiones y recorridos) y calcular la analítica del panel.
 - Guardar el *navmesh* interior que genera el admin y entregarlo a la app.
-- Hacer de intermediario con **MultiSet** (VPS): guarda el secreto y entrega tokens de corta duración a la app.
+- Firmar los tokens del **VPS propio** (`vps-server`) para la app y el panel. No le reenvía fotos: los clientes lo
+  llaman directo.
 - Enviar el correo de restablecer contraseña (SMTP).
 
 | Cliente | Repo | Cómo usa este backend |
@@ -48,7 +49,8 @@ cd backend
 cp .env.example .env        # y edita los valores (ver sección 6)
 ```
 
-Se recomienda clonar los tres repos como carpetas hermanas (`backend/`, `uco-map-admin/`, `uco-map-app/`).
+Se recomienda clonar los repos como carpetas hermanas (`backend/`, `uco-map-admin/`, `uco-map-app/` y, si se usa el
+VPS propio, `vps-server/`).
 
 ## 5. Instalar dependencias
 
@@ -69,16 +71,18 @@ Si exportas la variable en la terminal o la defines en el IDE, esa tiene priorid
 | `JWT_SECRET` | **Sí** (≥ 32 caracteres) | Firma de los JWT del panel | Local: cualquier texto largo (`openssl rand -base64 48`). Producción: responsable. |
 | `MAIL_USERNAME` | **Sí** | Remitente SMTP (Gmail) | Local: un valor ficticio basta para arrancar. Real: responsable. |
 | `MAIL_PASSWORD` | **Sí** | Contraseña de aplicación de Gmail | Ídem. Sin la real, «olvidé mi contraseña» falla al enviar. |
-| `MULTISET_CLIENT_ID` | **Sí** (puede ir vacía) | Credencial principal de MultiSet | Responsable del proyecto. Vacía: `/api/multiset/token` responde 503. |
-| `MULTISET_CLIENT_SECRET` | **Sí** (puede ir vacía) | Ídem | Ídem. |
-| `MULTISET_MAP_SET_CODE` | No | Map set del campus (tiene valor por defecto) | Portal de MultiSet / responsable. |
-| `MULTISET_QUERY_CLIENT_ID` / `_SECRET` | No | Credencial solo-consulta para los tokens de la app | Responsable. Si faltan se usa la principal (se registra una advertencia). |
+| `VPS_BASE_URL` | No | URL pública del VPS propio que reciben la app y el panel | Responsable / infraestructura. Vacía: `/api/vps/*` responde 503. |
+| `VPS_TOKEN_SECRET` | No (≥ 32 caracteres si se define) | Firma de los tokens del VPS propio | El mismo par `kid:secreto` debe estar en `VPS_TOKEN_SECRETS` del VPS. Vacía: 503. |
+| `VPS_TOKEN_KID` | No (`k1`) | Identificador del secreto (permite rotarlo) | Debe coincidir con el VPS. |
+| `VPS_MAP_SET_ID` | No (`uco`) | Map set del campus en el VPS propio | Ajuste propio. |
+| `VPS_TOKEN_TTL_SECONDS` / `VPS_ADMIN_TOKEN_TTL_SECONDS` | No (600 / 1800) | Vigencia de los tokens de la app y del panel | Ajuste propio. |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_AUTH_MAX` / `RATE_LIMIT_WINDOW` | No | Peticiones por IP (600 / 10 por 60 s) | Ajuste propio. |
 | `RATE_LIMIT_TRUSTED_PROXIES` | No | IPs/CIDR cuyo `X-Forwarded-For` se acepta | Por defecto redes privadas y loopback. |
 | `LOG_LEVEL` | No | Nivel de log de `co.edu.uco.ucomap` | `INFO` por defecto. |
 
 Variables que **debe proporcionar el responsable o infraestructura**: `MONGODB_URI` de producción, `JWT_SECRET` de
-producción, `MAIL_USERNAME`/`MAIL_PASSWORD`, todas las `MULTISET_*`. Nunca las subas al repositorio.
+producción, `MAIL_USERNAME`/`MAIL_PASSWORD` y `VPS_TOKEN_SECRET`. Nunca las subas al
+repositorio.
 
 Otros valores fijos en `application.properties` (sin variable): puerto `8080`, `app.data.init-on-startup=true`,
 `app.cors.allowed-origins=*`, expiración JWT 24 h, SMTP `smtp.gmail.com:587`, enlace de restablecer contraseña
@@ -122,7 +126,7 @@ todas las variables obligatorias; si falta una, el arranque falla con
 ## 9. Pruebas
 
 ```bash
-./mvnw test        # 189 pruebas; no necesitan MongoDB ni Internet (después de la primera descarga)
+./mvnw test        # 199 pruebas; no necesitan MongoDB ni Internet (después de la primera descarga)
 ```
 
 Usan `src/test/resources/application.properties` (secretos ficticios, sin siembra). Pruebas de carga con k6 en
@@ -168,7 +172,7 @@ Todas las respuestas van en `{ "data": ..., "succeeded": true }`; los errores en
 | Navegación interior | `/api/navigation/navmesh` y `/elevators` (lectura pública); conexiones, parches, ediciones, bloqueos | ADMIN |
 | Telemetría | `POST /api/sessions/ping`, `POST /api/trips`, `GET /api/trips/popular` | Público |
 | Analítica | `/api/sessions`, `/api/trips`, `/api/analytics` | ADMIN |
-| MultiSet | `POST /api/multiset/token` (público), `/usage`, `/map-meshes` | ADMIN |
+| VPS propio | `POST /api/vps/token` (público, alcance `localize`), `POST /api/vps/admin-token` (alcance `admin`) | ADMIN |
 | Usuarios | `/api/users` | ADMIN |
 
 ## 12. Conexión con Admin y App
@@ -177,6 +181,8 @@ Todas las respuestas van en `{ "data": ..., "succeeded": true }`; los errores en
   `app.password-reset.frontend-url` (la URL del admin).
 - **App** apunta aquí con `VITE_API_BASE` (build) o `BACKEND_URL` (proxy de desarrollo).
 - CORS permite cualquier origen, así que admin (`:5173`) y app (`:5174`) locales funcionan sin cambios.
+- **VPS propio:** el backend no lo llama; solo firma tokens con el secreto compartido. Arranque local y variables
+  del VPS en `vps-server/README.md`.
 - Si cambias un contrato, actualiza `uco-map-admin/src/services` + `src/types` y `uco-map-app/src/services`.
 
 ## 13. Problemas frecuentes
@@ -187,7 +193,9 @@ Todas las respuestas van en `{ "data": ..., "succeeded": true }`; los errores en
 | `JWT_SECRET must be at least 32 characters` | Usa un secreto más largo. |
 | `Timed out after 30000 ms while waiting to connect` (Mongo) | MongoDB no está corriendo: `docker start ucomap-mongo`. Revisa `MONGODB_URI`. |
 | `Port 8080 was already in use` | Otro proceso usa 8080 (`lsof -i :8080`). El puerto está fijo en `application.properties`; libera el puerto o usa `-Dspring-boot.run.arguments=--server.port=8081` y apunta los frontends a ese puerto. |
-| `POST /api/multiset/token` → 503 | No hay credenciales MultiSet (normal en local). |
+| `POST /api/vps/token` → 503 | Faltan `VPS_BASE_URL` o `VPS_TOKEN_SECRET` (normal si no usas el VPS propio). |
+| El VPS propio responde 401 a los tokens | `VPS_TOKEN_KID`/`VPS_TOKEN_SECRET` no coinciden con `VPS_TOKEN_SECRETS` del VPS. |
+| `VPS_TOKEN_SECRET must be at least 32 characters` | Usa un secreto más largo o deja la variable vacía. |
 | «Olvidé mi contraseña» no llega | `MAIL_*` ficticias o contraseña de aplicación inválida. |
 | 401 en endpoints del panel | Falta `Authorization: Bearer`, token vencido (24 h) o emitido antes de un cambio de contraseña. |
 | 429 Too Many Requests | Rate limit por IP; en local sube `RATE_LIMIT_MAX`/`RATE_LIMIT_AUTH_MAX`. |

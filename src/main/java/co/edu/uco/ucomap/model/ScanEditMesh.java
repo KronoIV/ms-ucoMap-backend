@@ -14,7 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ScanEditMesh {
 
-    /** Nombre del mapa MultiSet. */
+    /** Nombre del mapa (escaneo) del VPS. */
     private String map;
 
     /** Posición de la malla dentro del GLB del mapa (orden de recorrido). */

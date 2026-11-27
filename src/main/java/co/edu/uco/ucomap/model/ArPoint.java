@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Posición en metros dentro del mapa MultiSet (mismo espacio que la escena de Mattercraft). */
+/** Posición en metros dentro del espacio del mapa del VPS (el mismo de los escaneos del campus). */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -89,7 +89,7 @@ public record TripReportDTO(
         @Valid
         TransitionStats transition,
 
-        // Llamadas a la API de MultiSet (VPS) desde el inicio del recorrido; va en cada aviso
+        // Llamadas al VPS desde el inicio del recorrido; va en cada aviso
         @PositiveOrZero @Max(100_000)
         Integer vpsCalls,
 

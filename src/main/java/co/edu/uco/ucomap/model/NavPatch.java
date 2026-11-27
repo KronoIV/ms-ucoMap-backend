@@ -9,7 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.List;
 
-/** Polígono de suelo caminable que se suma al escaneo al generar el navmesh (huecos que MultiSet no capturó). */
+/** Polígono de suelo caminable que se suma al escaneo al generar el navmesh (huecos que el escaneo no capturó). */
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,6 +22,6 @@ public class NavPatch {
 
     private String label;
 
-    /** Vértices en orden sobre el piso, en el espacio del mapa MultiSet. */
+    /** Vértices en orden sobre el piso, en el espacio del mapa del VPS. */
     private List<ArPoint> points;
 }

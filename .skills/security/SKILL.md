@@ -19,11 +19,12 @@ description: Seguridad del backend UCO MAP (JWT, roles, endpoints públicos, rat
 
 ## Reglas de acceso (`security/config/SecurityConfig.java`)
 
-Orden: primero las rutas públicas, luego `/api/{sessions,trips,analytics,users,multiset,navigation,events}/**`
+Orden: primero las rutas públicas, luego `/api/{sessions,trips,analytics,users,vps,navigation,events}/**`
 como ADMIN y al final **todo POST/PUT/PATCH/DELETE en `/api/**` como ADMIN**; cualquier otra ruta exige
 autenticación. Públicas: login/forgot/reset, `POST /api/sessions/ping`, `POST /api/trips`, `GET /api/trips/popular`,
 `GET /api/campus/**`, `/api/buildings/**`, `/api/rooms/**`, `/api/graph/**`, `/api/settings/**`,
-`/api/navigation/navmesh`, `/api/navigation/elevators`, `/api/events/active`, `POST /api/multiset/token`.
+`/api/navigation/navmesh`, `/api/navigation/elevators`, `/api/events/active`,
+`POST /api/vps/token`. `/api/vps/**` (el resto) es ADMIN.
 
 Al agregar un endpoint público: insértalo en el bloque «Public routes» y agrega un caso en `SecurityIntegrationTest`.
 Los endpoints públicos de escritura (`ping`, `trips`) reciben datos de cualquier cliente: valida tamaños y formatos.
@@ -56,8 +57,7 @@ Correo con `EmailService` y la plantilla `templates/email/password-reset.html` v
 | `MONGODB_URI` | Sí (incluye usuario y contraseña) | Conexión a MongoDB |
 | `JWT_SECRET` | Sí | Firma de tokens del panel |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Sí (contraseña de aplicación de Gmail) | Envío de correos |
-| `MULTISET_CLIENT_ID` / `MULTISET_CLIENT_SECRET` | Sí | Credencial principal de MultiSet |
-| `MULTISET_QUERY_CLIENT_ID` / `_SECRET` | Sí | Credencial solo-consulta para tokens públicos (opcional) |
+| `VPS_TOKEN_SECRET` (+ `VPS_TOKEN_KID`) | Sí | Firma de los tokens del VPS propio (≥ 32 caracteres; el mismo par va en `VPS_TOKEN_SECRETS` del VPS). Opcional: vacía, `/api/vps/*` responde 503 |
 
 Reglas:
 
@@ -65,9 +65,12 @@ Reglas:
    pruebas, en `.env.example` ni en mensajes de log.
 2. En local van en `backend/.env` (git-ignorado; lo importa `spring.config.import=optional:file:.env[.properties]`).
    En producción, como variables del servicio en Railway. `.env.*` también está ignorado por git y Docker.
-3. La app recibe de `POST /api/multiset/token` un token corto (`VpsTokenDTO`), nunca el secreto.
+3. La app nunca recibe secretos: `POST /api/vps/token` entrega un JWT de 10 min con alcance `localize` y solo para
+   `VPS_MAP_SET_ID`; el de
+   `admin` (30 min) solo lo obtiene un ADMIN.
 4. **Historial:** hasta noviembre de 2026 los secretos estaban escritos en `application.properties` de este repo
-   público. Deben **rotarse** (Atlas, Gmail, MultiSet, JWT); quitarlos del archivo no los borra del historial.
+   público. Deben **rotarse** (Atlas, Gmail, JWT) y revocarse las credenciales del VPS externo que se usaba antes;
+   quitarlos del archivo no los borra del historial.
 
 ## Riesgos conocidos (no corregidos)
 

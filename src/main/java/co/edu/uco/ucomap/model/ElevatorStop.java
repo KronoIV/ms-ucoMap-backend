@@ -16,6 +16,6 @@ public class ElevatorStop {
     /** Texto del botón en la cabina cuando no es el número del piso (PB, S1…); null = el número. */
     private String button;
 
-    /** Frente a la puerta, sobre el piso, en el espacio del mapa MultiSet. */
+    /** Frente a la puerta, sobre el piso, en el espacio del mapa del VPS. */
     private ArPoint point;
 }

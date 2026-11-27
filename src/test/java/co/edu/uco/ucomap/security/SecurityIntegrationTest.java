@@ -8,12 +8,12 @@ import co.edu.uco.ucomap.controller.AnalyticsController;
 import co.edu.uco.ucomap.controller.AuthController;
 import co.edu.uco.ucomap.controller.CampusEventController;
 import co.edu.uco.ucomap.controller.GraphController;
-import co.edu.uco.ucomap.controller.MultiSetController;
 import co.edu.uco.ucomap.controller.NavigationTripController;
+import co.edu.uco.ucomap.controller.UcoVpsController;
 import co.edu.uco.ucomap.controller.UserController;
 import co.edu.uco.ucomap.dto.TripFilter;
 import co.edu.uco.ucomap.dto.TripReportDTO;
-import co.edu.uco.ucomap.dto.VpsTokenDTO;
+import co.edu.uco.ucomap.dto.UcoVpsDTO;
 import co.edu.uco.ucomap.model.Role;
 import co.edu.uco.ucomap.model.TripStatus;
 import co.edu.uco.ucomap.model.User;
@@ -25,10 +25,9 @@ import co.edu.uco.ucomap.security.service.UserDetailsServiceImpl;
 import co.edu.uco.ucomap.service.AnalyticsService;
 import co.edu.uco.ucomap.service.CampusEventService;
 import co.edu.uco.ucomap.service.GraphService;
-import co.edu.uco.ucomap.service.MultiSetService;
-import co.edu.uco.ucomap.service.MultiSetUsageService;
 import co.edu.uco.ucomap.service.NavigationTripService;
 import co.edu.uco.ucomap.service.PasswordResetService;
+import co.edu.uco.ucomap.service.UcoVpsService;
 import co.edu.uco.ucomap.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +48,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,7 +56,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,8 +64,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * No usa base de datos.
  */
 @WebMvcTest(controllers = {AuthController.class, GraphController.class,
-        NavigationTripController.class, UserController.class, MultiSetController.class, AnalyticsController.class,
-        CampusEventController.class})
+        NavigationTripController.class, UserController.class, AnalyticsController.class,
+        CampusEventController.class, UcoVpsController.class})
 @Import({SecurityConfig.class, CorsConfig.class, JwtUtil.class, UserDetailsServiceImpl.class, ClientIpResolver.class})
 class SecurityIntegrationTest {
 
@@ -85,10 +82,9 @@ class SecurityIntegrationTest {
     @MockitoBean NavigationTripService tripService;
     @MockitoBean UserService userService;
     @MockitoBean PasswordResetService passwordResetService;
-    @MockitoBean MultiSetService multiSetService;
-    @MockitoBean MultiSetUsageService multiSetUsageService;
     @MockitoBean AnalyticsService analyticsService;
     @MockitoBean CampusEventService eventService;
+    @MockitoBean UcoVpsService ucoVpsService;
 
     @BeforeEach
     void setUp() {
@@ -119,35 +115,52 @@ class SecurityIntegrationTest {
     // ── Rutas públicas que usa la app móvil ──────────────────
 
     @Test
-    void appGetsVpsTokenWithoutLoginInMultiSetFormat() throws Exception {
-        when(multiSetService.getVpsToken()).thenReturn(
-                new VpsTokenDTO("tok", Instant.parse("2026-01-01T00:25:00Z"), "MSET_TEST"));
+    void appGetsOwnVpsTokenWithoutLogin() throws Exception {
+        when(ucoVpsService.isConfigured()).thenReturn(true);
+        when(ucoVpsService.appToken("sesion-12345678")).thenReturn(new UcoVpsDTO.TokenResponse(
+                "tok", Instant.parse("2026-01-01T00:10:00Z"), "https://vps.example", "uco", "localize"));
 
-        // El SDK web envía Basic con credenciales ficticias; no debe interferir con el filtro JWT
-        mvc.perform(post("/api/multiset/token").header("Authorization", "Basic cG9jOnBvYw=="))
+        mvc.perform(post("/api/vps/token").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":\"sesion-12345678\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("tok"))
-                .andExpect(jsonPath("$.mapSetCode").value("MSET_TEST"))
-                .andExpect(jsonPath("$.succeeded").doesNotExist())
+                .andExpect(jsonPath("$.data.token").value("tok"))
+                .andExpect(jsonPath("$.data.baseUrl").value("https://vps.example"))
                 .andExpect(result -> assertThat(result.getResponse().getHeader("Cache-Control")).contains("no-store"));
+
+        // Sin cuerpo también sirve (versiones de la app sin id de sesión)
+        mvc.perform(post("/api/vps/token")).andExpect(status().isOk());
+        verify(ucoVpsService).appToken(null);
     }
 
     @Test
-    void mapMeshesStayAdminOnly() throws Exception {
-        mvc.perform(get("/api/multiset/map-meshes")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/multiset/token")).andExpect(status().isUnauthorized());
-        verify(multiSetService, never()).getMapMeshes(anyBoolean());
+    void ownVpsTokenValidatesTheSessionIdAndReportsWhenItIsOff() throws Exception {
+        when(ucoVpsService.isConfigured()).thenReturn(true);
+        mvc.perform(post("/api/vps/token").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":\"../../etc\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.sessionId").exists());
+
+        when(ucoVpsService.isConfigured()).thenReturn(false);
+        mvc.perform(post("/api/vps/token"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.succeeded").value(false));
+        verify(ucoVpsService, never()).appToken(any());
     }
 
     @Test
-    void multiSetUsageIsAdminOnly() throws Exception {
-        mvc.perform(get("/api/multiset/usage")).andExpect(status().isUnauthorized());
-        mvc.perform(put("/api/multiset/usage").contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isUnauthorized());
-        verify(multiSetUsageService, never()).usage();
+    void ownVpsAdminTokenIsAdminOnly() throws Exception {
+        when(ucoVpsService.isConfigured()).thenReturn(true);
+        when(ucoVpsService.adminToken(EMAIL)).thenReturn(new UcoVpsDTO.TokenResponse(
+                "admin-tok", Instant.parse("2026-01-01T00:30:00Z"), "https://vps.example", "uco", "admin"));
 
-        mvc.perform(get("/api/multiset/usage").header("Authorization", bearer())).andExpect(status().isOk());
-        verify(multiSetUsageService).usage();
+        mvc.perform(post("/api/vps/admin-token")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/vps/token")).andExpect(status().isUnauthorized());
+        verify(ucoVpsService, never()).adminToken(anyString());
+
+        mvc.perform(post("/api/vps/admin-token").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").value("admin-tok"))
+                .andExpect(jsonPath("$.data.scope").value("admin"));
     }
 
     @Test

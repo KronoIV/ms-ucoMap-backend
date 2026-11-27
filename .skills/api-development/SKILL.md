@@ -93,8 +93,8 @@ Público = sin token. ADMIN = `Authorization: Bearer <jwt>` con rol ADMIN.
 | `POST /api/navigation/elevators`, `PUT/DELETE /elevators/{id}` | ADMIN | `NavigationController` |
 | `GET/POST /api/navigation/scan-edits`, `DELETE /scan-edits/{id}` | ADMIN | `MapEditController` |
 | `GET/POST /api/navigation/blocks`, `DELETE /blocks/{id}` | ADMIN | `MapEditController` |
-| `POST /api/multiset/token` (respuesta sin sobre) | Público | `MultiSetController` |
-| `GET/PUT /api/multiset/usage`, `GET /api/multiset/map-meshes` | ADMIN | `MultiSetController` |
+| `POST /api/vps/token` (cuerpo opcional `{sessionId}`; 503 si no está configurado) | Público | `UcoVpsController` |
+| `POST /api/vps/admin-token` | ADMIN | `UcoVpsController` |
 | `GET/POST /api/users`, `GET/PUT/DELETE /api/users/{id}` | ADMIN | `UserController` |
 
 ## Errores frecuentes
